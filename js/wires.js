@@ -64,15 +64,14 @@ function setupNodes(){
 function setupTransistors(){
 	for(i in transdefs){
 		var tdef = transdefs[i];
-		var name = tdef[0];
-		var gate = tdef[1];
-		var c1 = tdef[2];
-		var c2 = tdef[3];
-		var trans = {name: name, on: false, gate: gate, c1: c1, c2: c2};
-		nodes[gate].gates.push(name);
-		nodes[c1].c1c2s.push(name);
-		nodes[c2].c1c2s.push(name);
-		transistors[name] = trans;
+		var gate = tdef[0];
+		var c1 = tdef[1];
+		var c2 = tdef[2];
+		var trans = {name: i, on: false, gate: gate, c1: c1, c2: c2};
+		nodes[gate].gates.push(i);
+		nodes[c1].c1c2s.push(i);
+		nodes[c2].c1c2s.push(i);
+		transistors[i] = trans;
 	}
 }
 
