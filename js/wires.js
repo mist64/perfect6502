@@ -22,12 +22,6 @@
 
 var statbox;
 
-// Index of layerNames corresponds to index into drawLayers
-var layernames = ['metal', 'switched diffusion', 'inputdiode', 'grounded diffusion', 'powered diffusion', 'polysilicon'];
-var colors = ['rgba(128,128,192,0.4)','#FFFF00','#FF00FF','#4DFF4D',
-              '#FF4D4D','#801AC0','rgba(128,0,255,0.75)'];
-var drawlayers = [true, true, true, true, true, true];
-              
 var nodes = new Array();
 var transistors = {};
 
@@ -56,11 +50,12 @@ function setup_part2(){
 }
 
 function setupNodes(){
+	var w = 0;
 	for(var i in segdefs){
 		var seg = segdefs[i];
-		var w = seg[0];
-		nodes[w] = {pullup: seg[1]=='+',
+		nodes[w] = {pullup: seg=='+',
 		            state: 'fl', gates: new Array(), c1c2s: new Array()};
+		w++;
 		if(w==ngnd) continue;
 		if(w==npwr) continue;
 	}
