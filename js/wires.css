@@ -35,35 +35,6 @@ div.frame {
  height: 600px;
 }
 
-div.chip {
- background: lightgray;
- border: 2px solid gray;
- position: absolute;
- width: 800px;
- height: 600px;
- overflow: hidden;
-}
-
-canvas.chip {
- position: absolute;
- width: 600px;
- height: 600px;
-}
-
-div.buttons{
- position: absolute;
- top: -5px;
- left: 820px;
-}
-
-p.status {
- position: absolute;
- left: 820px;
- top: 20px;
- font-family: monospace;
- font-size: 12px;
-}
-
 img.navbutton{
  border: 0px;
 }
@@ -77,15 +48,6 @@ img.navplay{
 img.navstop{
  position: absolute;
  border: 0px;
-}
-
-table.memtable {
- position: absolute;
- top: 78px;
- left: 820px;
- font-family: monospace;
- font-size: 12px;
- border-spacing: 0px;
 }
 
 #title {
