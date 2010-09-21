@@ -100,7 +100,7 @@ function initChip(){
 	for(var i=0;i<8;i++){setHigh('clk0'), setLow('clk0');}
 	setHigh('res');
 	for(var i=0;i<18;i++){resetStep();}
-	refresh();
+//	refresh();
 	cycle = 0;
 	trace = Array();
 	chipStatus();
@@ -118,7 +118,7 @@ function halfStep(){
 	var clk = isNodeHigh(nodenames['clk0']);
 	if (clk) {setLow('clk0'); handleBusRead(); } 
 	else {setHigh('clk0'); handleBusWrite();}
-	refresh();
+//	refresh();
 }
 
 function resetStep(){

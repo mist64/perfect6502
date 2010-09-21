@@ -175,7 +175,7 @@ function showState(str){
 		var gates = nodes[i].gates;
 		for(var t in gates) transistors[gates[t]].on = isNodeHigh(i);
 	}
-	refresh();
+//	refresh();
 }
 
 
