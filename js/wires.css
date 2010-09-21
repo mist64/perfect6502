@@ -28,13 +28,6 @@ body {
  font-size: 12px;
 }
 
-div.frame {
- margin-left: 10px;
- position: relative;
- width: 1150px;
- height: 600px;
-}
-
 img.navbutton{
  border: 0px;
 }

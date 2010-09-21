@@ -20,10 +20,6 @@
  THE SOFTWARE.
 */
 
-var frame, chipbg, overlay, hilite, hitbuffer, ctx;
-var centerx=300, centery=300;
-var zoom=1;
-var dragMouseX, dragMouseY, moved;
 var statbox;
 
 // Index of layerNames corresponds to index into drawLayers
@@ -48,20 +44,15 @@ var npwr = nodenames['vcc'];
 // try to present a meaningful page before starting expensive work
 function setup(){
 	statbox = document.getElementById('status');
-	setStatus('loading 6502...');
-	setTimeout(setup_part2, 0);
-}
-
-function setup_part2(){
-	frame = document.getElementById('frame');
-	statbox = document.getElementById('status');
 	setupNodes();
 	setupTransistors();
 	setupTable();
-	setStatus('resetting 6502...');
 	initChip();
 	document.getElementById('stop').style.visibility = 'hidden';
 	go();
+}
+
+function setup_part2(){
 }
 
 function setupNodes(){
@@ -90,46 +81,16 @@ function setupTransistors(){
 	}
 }
 
-
-
-function hexdigit(n){return '0123456789ABCDEF'.charAt(n);}
-
-
 /////////////////////////
 //
 // Etc.
 //
 /////////////////////////
 
-function setChipStyle(props){
-	for(var i in props){
-//		chipbg.style[i] = props[i];
-		overlay.style[i] = props[i];
-		hilite.style[i] = props[i];
-		hitbuffer.style[i] = props[i];
-	}
-}
-
-
-function localx(el, gx){
-	return gx-el.getBoundingClientRect().left;
-}
-
-function localy(el, gy){
-	return gy-el.getBoundingClientRect().top;
-}
-
 function setStatus(){
 	var res = '';
 	for(var i=0;i<arguments.length;i++) res=res+arguments[i]+' ';
 	statbox.innerHTML = res;
-}
-
-function nodeName(n) {
-	for(var i in nodenames){
-		if(nodenames[i]==n) return i;
-	}
-	return '';
 }
 
 function now(){return  new Date().getTime();}
