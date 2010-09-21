@@ -25,7 +25,6 @@ var code = [0xa9, 0x00, 0x20, 0x10, 0x00, 0x4c, 0x02, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0xe8, 0x88, 0xe6, 0x40, 0x38, 0x69, 0x02, 0x60];
 var cycle = 0;
-var trace = Array();
 var running = false;
 
 function go(n){
@@ -59,12 +58,10 @@ function initChip(){
 	setHigh('res');
 	for(var i=0;i<18;i++){resetStep();}
 	cycle = 0;
-	trace = Array();
 	chipStatus();
 }
 
 function step(){
-	trace[cycle]= {chip: stateString(), mem: getMem()};
 	halfStep();
 	cycle++;
 	chipStatus();
@@ -188,15 +185,6 @@ function resetChip(){
 function stepForward(){
 	stopChip();
 	step();
-}
-
-function stepBack(){
-	if(cycle==0) return;
-	showState(trace[--cycle].chip);
-	setMem(trace[cycle].mem);
-	var clk = isNodeHigh(nodenames['clk0']);
-	if(!clk) writeDataBus(mRead(readAddressBus()));
-	chipStatus();
 }
 
 function chipStatus(){

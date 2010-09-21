@@ -23,14 +23,15 @@
 var ctrace = false;
 var noGraphics = false;
 var loglevel = 3;
-var ridx = 0;
 
 function recalcNodeList(list){
+//	console.log("recalcNodeList", list);
 	var n = list[0];
 	var recalclist = new Array();
 	for(var j=0;j<100;j++){		// loop limiter
 		if(list.length==0) return;
 		if(ctrace) console.log(j, list);
+//		console.log(j, list);
 		for(var i in list) recalcNode(list[i], recalclist);
 		list = recalclist;
 		recalclist = new Array();
@@ -92,7 +93,6 @@ function addRecalcNode(nn, recalclist){
 	if(nn==npwr) return;
 	if(arrayContains(recalclist, nn)) return;
 	recalclist.push(nn);
-//	setAdd(recalclist, nn);
 }
 
 function getNodeGroup(i){
@@ -154,37 +154,6 @@ function allNodes(){
 	return res;
 }
 
-function stateString(){
-	var codes = {gnd: 'g', vcc: 'v', pu: 'p', pd: 'd', fh: 'f', fl: 'l'};
-	var res = '';
-	for(var i=0;i<1725;i++){
-		var n = nodes[i];
-		if(n==undefined) res+='x';
-		else if(i==ngnd) res+='g';
-		else if(i==npwr) res+='v';
-		else res+= codes[n.state];
-	}
-	return res;
-}
-
-function showState(str){
-	var codes = {g: 'gnd', v: 'vcc', p: 'pu', d: 'pd', f: 'fh', l: 'fl'};
-	for(var i=0;i<str.length;i++){
-		if(str[i]=='x') continue;
-		nodes[i].state = codes[str[i]];
-		var gates = nodes[i].gates;
-		for(var t in gates) transistors[gates[t]].on = isNodeHigh(i);
-	}
-//	refresh();
-}
-
-
-function setPd(name){
-	var nn = nodenames[name];
-	nodes[nn].pullup = false;
-	nodes[nn].pulldown = true;
-}
-
 function setHigh(name){
 	var nn = nodenames[name];
 	nodes[nn].pullup = true;
@@ -197,14 +166,6 @@ function setLow(name){
 	nodes[nn].pullup = false;
 	nodes[nn].pulldown = true;
 	recalcNodeList([nn]);
-}
-
-function setAdd(arr, el){
-	var idx = ridx%(arr.length+1);
-	ridx+=131;
-	ridx%=123;
-	arr.splice(idx, 0, el);
-	return arr;
 }
 
 function arrayContains(arr, el){return arr.indexOf(el)!=-1;}
