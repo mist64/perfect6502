@@ -20,18 +20,15 @@
  THE SOFTWARE.
 */
 
-var ctrace = false;
-var noGraphics = false;
+var ctrace = true;
 var loglevel = 3;
 
 function recalcNodeList(list){
-//	console.log("recalcNodeList", list);
 	var n = list[0];
 	var recalclist = new Array();
 	for(var j=0;j<100;j++){		// loop limiter
 		if(list.length==0) return;
 		if(ctrace) console.log(j, list);
-//		console.log(j, list);
 		for(var i in list) recalcNode(list[i], recalclist);
 		list = recalclist;
 		recalclist = new Array();
@@ -138,14 +135,6 @@ function getNodeValue(group){
 
 function isNodeHigh(nn){
 	return arrayContains(['vcc','pu','fh'], nodes[nn].state);
-}
-
-function saveString(name, str){
-	var request = new XMLHttpRequest();
-	request.onreadystatechange=function(){};
-	request.open('PUT', 'save.php?name='+name, true);
-	request.setRequestHeader('Content-Type', 'text/plain');
-	request.send(str);
 }
 
 function allNodes(){

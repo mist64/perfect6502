@@ -56,7 +56,7 @@ function initChip(){
 	recalcNodeList(allNodes()); 
 	for(var i=0;i<8;i++){setHigh('clk0'), setLow('clk0');}
 	setHigh('res');
-	for(var i=0;i<18;i++){resetStep();}
+	for(var i=0;i<18;i++){halfStep();}
 	cycle = 0;
 	chipStatus();
 }
@@ -70,12 +70,6 @@ function step(){
 function halfStep(){
 	var clk = isNodeHigh(nodenames['clk0']);
 	if (clk) {setLow('clk0'); handleBusRead(); } 
-	else {setHigh('clk0'); handleBusWrite();}
-}
-
-function resetStep(){
-	var clk = isNodeHigh(nodenames['clk0']);
-	if (clk) {setLow('clk0'); handleBusRead(); }
 	else {setHigh('clk0'); handleBusWrite();}
 }
 
