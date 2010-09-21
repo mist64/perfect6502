@@ -52,12 +52,8 @@ function setup_part2(){
 function setupNodes(){
 	var w = 0;
 	for(var i in segdefs){
-		var seg = segdefs[i];
-		nodes[w] = {pullup: seg=='+',
+		nodes[w++] = {pullup: segdefs[i],
 		            state: 'fl', gates: new Array(), c1c2s: new Array()};
-		w++;
-		if(w==ngnd) continue;
-		if(w==npwr) continue;
 	}
 }
 
