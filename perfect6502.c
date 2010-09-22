@@ -128,15 +128,9 @@ arrayContains(int *arr, int count, int el)
 	int i;
 	for (i = 0; i < count; i++) {
 		if (arr[i] == el) {
-#ifdef DEBUG
-			printf("YES\n");
-#endif
 			return YES;
 		}
 	}
-#ifdef DEBUG
-	printf("NO\n");
-#endif
 	return NO;
 }
 
@@ -248,34 +242,6 @@ floatnode(int nn)
 #endif
 }
 
-void
-turnTransistorOn(transistor_t *t, int *recalclist, int *recalccount)
-{
-	if (t->on)
-		return;
-#ifdef DEBUG
-	printf("%s t%d, %d, %d, %d\n", __func__, t->name, t->gate, t->c1, t->c2);
-#endif
-	t->on = YES;
-	addRecalcNode(t->c1, recalclist, recalccount);
-	addRecalcNode(t->c2, recalclist, recalccount);
-}
-
-void
-turnTransistorOff(transistor_t *t, int *recalclist, int *recalccount)
-{
-	if (!t->on)
-		return;
-#ifdef DEBUG
-	printf("%s t%d, %d, %d, %d\n", __func__, t->name, t->gate, t->c1, t->c2);
-#endif
-	t->on = NO;
-	floatnode(t->c1);
-	floatnode(t->c2);
-	addRecalcNode(t->c1, recalclist, recalccount);
-	addRecalcNode(t->c2, recalclist, recalccount);
-}
-
 BOOL
 isNodeHigh(int nn)
 {
@@ -299,10 +265,16 @@ recalcTransistor(int tn, int *recalclist, int *recalccount)
 	printarray(recalclist, *recalccount);
 #endif
 	transistor_t *t = &transistors[tn];
-	if (isNodeHigh(t->gate))
-		turnTransistorOn(t, recalclist, recalccount);
-	else
-		turnTransistorOff(t, recalclist, recalccount);
+	BOOL on = isNodeHigh(t->gate);
+	if (on == t->on)
+		return;
+	t->on = on;
+	if (!on) {
+		floatnode(t->c1);
+		floatnode(t->c2);
+	}
+	addRecalcNode(t->c1, recalclist, recalccount);
+	addRecalcNode(t->c2, recalclist, recalccount);
 }
 
 void
@@ -367,7 +339,6 @@ recalcNodeList(int *list, int count)
 		for (i = 0; i < count; i++)
 			recalcNode(list[i], recalclist, &recalccount);
 		SWAP(list, recalclist);
-		
 		count = recalccount;
 		recalccount = 0;
 	}
