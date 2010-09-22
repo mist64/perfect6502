@@ -122,14 +122,12 @@ printarray(int *array, int count)
 
 int group[NODES];
 int groupcount;
+int groupbitmap[NODES];
 
 BOOL
 arrayContains(int el)
 {
-#ifdef DEBUG
-	printf("%s el=%d, arr=", __func__, el);
-	printarray(arr, count);
-#endif
+#if 0
 	int i;
 	for (i = 0; i < groupcount; i++) {
 		if (group[i] == el) {
@@ -137,6 +135,9 @@ arrayContains(int el)
 		}
 	}
 	return NO;
+#else
+	return groupbitmap[el];
+#endif
 }
 
 typedef struct {
@@ -150,9 +151,7 @@ list_t recalc;
 void
 clearRecalc()
 {
-	int i;
-	for (i = 0; i < NODES; i++)
-		recalc.bitmap[i] = 0;
+	bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES);
 	recalc.count = 0;
 }
 
@@ -191,6 +190,7 @@ addNodeToGroup(int i)
 	if (arrayContains(i))
 		return;
 	group[groupcount++] = i;
+	groupbitmap[i] = 1;
 	if (i == ngnd)
 		return;
 	if (i == npwr)
@@ -302,6 +302,7 @@ recalcNode(int node)
 		return;
 
 	groupcount = 0;
+	bzero(groupbitmap, sizeof(groupbitmap));
 	addNodeToGroup(node);
 
 	int newv = getNodeValue();
