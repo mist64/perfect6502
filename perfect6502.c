@@ -873,7 +873,7 @@ step()
 		chipStatus();
 
 	PC = readPC();
-	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0)) {
+	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0) && isNodeHigh(clk0)) {
 		A = readA();
 		X = readX();
 		Y = readY();
