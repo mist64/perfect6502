@@ -20,7 +20,7 @@
  THE SOFTWARE.
 */
 
-var ctrace = true;
+var ctrace = false;
 var loglevel = 3;
 
 function recalcNodeList(list){

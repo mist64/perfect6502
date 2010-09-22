@@ -54,6 +54,19 @@ function initChip(){
 	setHigh('rdy'); setLow('so');
 	setHigh('irq'); setHigh('nmi');
 	recalcNodeList(allNodes()); 
+
+	var string = '';
+	for (var i in nodes) {
+		string += ' '+nodes[i].pullup;
+	}
+	console.log(string);
+
+	string = '';
+	for (var i in transistors) {
+		string += ' '+transistors[i].on;
+	}
+	console.log(string);
+
 	for(var i=0;i<8;i++){setHigh('clk0'), setLow('clk0');}
 	setHigh('res');
 	for(var i=0;i<18;i++){halfStep();}
