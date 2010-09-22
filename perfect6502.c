@@ -39,8 +39,8 @@ typedef struct {
 	BOOL pullup;
 	BOOL pulldown;
 	int state;
-	int gates[1800];
-	int c1c2s[1800];
+	int gates[NODES];
+	int c1c2s[2*NODES];
 	int gatecount;
 	int c1c2count;
 } node_t;
@@ -87,9 +87,16 @@ setupTransistors()
 		transistors[i].gate = gate;
 		transistors[i].c1 = c1;
 		transistors[i].c2 = c2;
+//		printf("1 gate=%d, gatecount=%d\n", gate, nodes[gate].gatecount);
 		nodes[gate].gates[nodes[gate].gatecount++] = i;
+//		printf("2 gate=%d, gatecount=%d\n", gate, nodes[gate].gatecount);
+		if (nodes[gate].gatecount > NODES)
+			printf("0BIG\n");
 		nodes[c1].c1c2s[nodes[c1].c1c2count++] = i;
 		nodes[c2].c1c2s[nodes[c2].c1c2count++] = i;
+//		printf("3 gate=%d, c1c2count=%d\n", gate, nodes[gate].c1c2count);
+		if (nodes[gate].c1c2count > 2*NODES)
+			printf("1BIG\n");
 	}
 }
 
@@ -314,6 +321,8 @@ recalcNode(int node, int *recalclist, int *recalccount)
 	printarray(group, groupcount);
 #endif
 	for (i = 0; i < groupcount; i++) {
+//printf("i=%d\n", i);
+//printf("group[i]=%d\n", group[i]);
 		node_t n = nodes[group[i]];
 #ifdef DEBUG
 		if (n.state != newv)
@@ -324,6 +333,7 @@ recalcNode(int node, int *recalclist, int *recalccount)
 #ifdef DEBUG
 		printf("loop x %d\n", n.gatecount);
 #endif
+//printf("there are %d gates\n", n.gatecount);
 		for (t = 0; t < n.gatecount; t++)
 			recalcTransistor(n.gates[t], recalclist, recalccount);
 	}
