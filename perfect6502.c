@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +32,9 @@ enum {
 	STATE_PU
 };
 
+#define NODES 1725
+#define TRANSISTORS 3510
+
 typedef struct {
 	BOOL pullup;
 	BOOL pulldown;
@@ -42,7 +45,7 @@ typedef struct {
 	int c1c2count;
 } node_t;
 
-node_t nodes[1725];
+node_t nodes[NODES];
 
 #define EMPTY -1
 
@@ -54,7 +57,7 @@ typedef struct {
 	int c2;
 } transistor_t;
 
-transistor_t transistors[3510];
+transistor_t transistors[TRANSISTORS];
 
 uint8_t memory[65536];
 int cycle;
@@ -343,12 +346,15 @@ recalcNodeList(int *list, int count)
 		printf("%s iteration=%d, list=", __func__, j);
 		printarray(list, count);
 #endif
-printf("before: %d\n", recalccount);
+printf("%s:%d iteration=%d count=%d\n", __func__, __LINE__, j, count);
+//printf("before: %d\n", recalccount);
 		for (i = 0; i < count; i++)
 			recalcNode(list[i], recalclist, &recalccount);
-printf("after: %d\n", recalccount);
+printf("%s:%d iteration=%d recalccount=%d\n", __func__, __LINE__, j, recalccount);
+//printf("after: %d\n", recalccount);
 		for (i = 0; i < recalccount; i++)
 			list[i] = recalclist[i];
+printf("%s:%d iteration=%d\n", __func__, __LINE__, j);
 		count = recalccount;
 		recalccount = 0;
 	}
@@ -360,12 +366,12 @@ recalcAllNodes()
 #ifdef DEBUG
 	printf("%s\n", __func__);
 #endif
-	int count = sizeof(nodes)/sizeof(*nodes);
-	int list[count];
+	printf("%s count=%d\n", __func__, NODES);
+	int list[NODES];
 	int i;
-	for (i = 0; i < count; i++)
+	for (i = 0; i < NODES; i++)
 		list[i] = i;
-	recalcNodeList(list, count);
+	recalcNodeList(list, NODES);
 }
 
 void
@@ -376,7 +382,9 @@ setLow(int nn)
 #endif
 	nodes[nn].pullup = NO;
 	nodes[nn].pulldown = YES;
-	recalcNodeList(&nn, 1);
+	int list[NODES];
+	list[0] = nn;
+	recalcNodeList(list, 1);
 }
 
 void
@@ -387,13 +395,15 @@ setHigh(int nn)
 #endif
 	nodes[nn].pullup = YES;
 	nodes[nn].pulldown = NO;
-	recalcNodeList(&nn, 1);
+	int list[NODES];
+	list[0] = nn;
+	recalcNodeList(list, 1);
 }
 
 void
 writeDataBus(uint8_t x)
 {
-	int recalcs[1800];
+	int recalcs[NODES];
 	int recalcscount = 0;
 	int i;
 	for (i = 0; i < 8; i++) {
@@ -653,12 +663,12 @@ initChip()
 	printf("%s\n", __func__);
 #endif
 	int nn;
-	for (nn = 0; nn < sizeof(nodes)/sizeof(*nodes); nn++)
+	for (nn = 0; nn < NODES; nn++)
 		nodes[nn].state = STATE_FL;
 	nodes[ngnd].state = STATE_GND;
 	nodes[npwr].state = STATE_VCC;
 	int tn;
-	for (tn = 0; tn < sizeof(transistors)/sizeof(*transistors); tn++) 
+	for (tn = 0; tn < TRANSISTORS; tn++) 
 		transistors[tn].on = NO;
 	setLow(res);
 	setLow(clk0);
