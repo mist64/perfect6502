@@ -1,4 +1,5 @@
 //#define DEBUG
+int verbose = 0;
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -415,6 +416,15 @@ setHigh(int nn)
 }
 
 void
+setHighLow(int nn, BOOL val)
+{
+	if (val)
+		setHigh(nn);
+	else
+		setLow(nn);
+}
+
+void
 writeDataBus(uint8_t x)
 {
 	int recalcs[NODES];
@@ -447,7 +457,8 @@ writeDataBus(uint8_t x)
 
 uint8_t mRead(uint16_t a)
 {
-	printf("PEEK($%04X) = $%02X\n", a, memory[a]);
+	if (verbose)
+		printf("PEEK($%04X) = $%02X\n", a, memory[a]);
 	return memory[a];
 }
 
@@ -495,7 +506,8 @@ readDataBus()
 void
 mWrite(uint16_t a, uint8_t d)
 {
-	printf("POKE $0x%04X, $%02X\n", a, d);
+	if (verbose)
+		printf("POKE $%04X, $%02X\n", a, d);
 	memory[a] = d;
 }
 
@@ -507,6 +519,117 @@ handleBusWrite()
 		uint8_t d = readDataBus();
 		mWrite(a,d);
 	}
+}
+
+void
+setA(uint8_t val)
+{
+	setHighLow(a0, (val >> 0) & 1);
+	setHighLow(a1, (val >> 1) & 1);
+	setHighLow(a2, (val >> 2) & 1);
+	setHighLow(a3, (val >> 3) & 1);
+	setHighLow(a4, (val >> 4) & 1);
+	setHighLow(a5, (val >> 5) & 1);
+	setHighLow(a6, (val >> 6) & 1);
+	setHighLow(a7, (val >> 7) & 1);	
+}
+
+void
+setX(uint8_t val)
+{
+	setHighLow(x0, (val >> 0) & 1);
+	setHighLow(x1, (val >> 1) & 1);
+	setHighLow(x2, (val >> 2) & 1);
+	setHighLow(x3, (val >> 3) & 1);
+	setHighLow(x4, (val >> 4) & 1);
+	setHighLow(x5, (val >> 5) & 1);
+	setHighLow(x6, (val >> 6) & 1);
+	setHighLow(x7, (val >> 7) & 1);	
+}
+
+void
+setY(uint8_t val)
+{
+	setHighLow(y0, (val >> 0) & 1);
+	setHighLow(y1, (val >> 1) & 1);
+	setHighLow(y2, (val >> 2) & 1);
+	setHighLow(y3, (val >> 3) & 1);
+	setHighLow(y4, (val >> 4) & 1);
+	setHighLow(y5, (val >> 5) & 1);
+	setHighLow(y6, (val >> 6) & 1);
+	setHighLow(y7, (val >> 7) & 1);	
+}
+
+void
+setSP(uint8_t val)
+{
+	setHighLow(s0, (val >> 0) & 1);
+	setHighLow(s1, (val >> 1) & 1);
+	setHighLow(s2, (val >> 2) & 1);
+	setHighLow(s3, (val >> 3) & 1);
+	setHighLow(s4, (val >> 4) & 1);
+	setHighLow(s5, (val >> 5) & 1);
+	setHighLow(s6, (val >> 6) & 1);
+	setHighLow(s7, (val >> 7) & 1);	
+}
+
+void
+setP(uint8_t val)
+{
+	setHighLow(p0, (val >> 0) & 1);
+	setHighLow(p1, (val >> 1) & 1);
+	setHighLow(p2, (val >> 2) & 1);
+	setHighLow(p3, (val >> 3) & 1);
+	setHighLow(p4, (val >> 4) & 1);
+	setHighLow(p5, (val >> 5) & 1);
+	setHighLow(p6, (val >> 6) & 1);
+	setHighLow(p7, (val >> 7) & 1);	
+}
+
+void
+setNOTIR(uint8_t val)
+{
+	setHighLow(notir0, (val >> 0) & 1);
+	setHighLow(notir1, (val >> 1) & 1);
+	setHighLow(notir2, (val >> 2) & 1);
+	setHighLow(notir3, (val >> 3) & 1);
+	setHighLow(notir4, (val >> 4) & 1);
+	setHighLow(notir5, (val >> 5) & 1);
+	setHighLow(notir6, (val >> 6) & 1);
+	setHighLow(notir7, (val >> 7) & 1);	
+}
+
+void
+setPCL(uint8_t val)
+{
+	setHighLow(pcl0, (val >> 0) & 1);
+	setHighLow(pcl1, (val >> 1) & 1);
+	setHighLow(pcl2, (val >> 2) & 1);
+	setHighLow(pcl3, (val >> 3) & 1);
+	setHighLow(pcl4, (val >> 4) & 1);
+	setHighLow(pcl5, (val >> 5) & 1);
+	setHighLow(pcl6, (val >> 6) & 1);
+	setHighLow(pcl7, (val >> 7) & 1);	
+}
+
+void
+setPCH(uint8_t val)
+{
+	setHighLow(pch0, (val >> 0) & 1);
+	setHighLow(pch1, (val >> 1) & 1);
+	setHighLow(pch2, (val >> 2) & 1);
+	setHighLow(pch3, (val >> 3) & 1);
+	setHighLow(pch4, (val >> 4) & 1);
+	setHighLow(pch5, (val >> 5) & 1);
+	setHighLow(pch6, (val >> 6) & 1);
+	setHighLow(pch7, (val >> 7) & 1);	
+}
+
+void
+setPC(uint16_t val)
+{
+	setPCL(val & 0xFF);
+	setPCH(val >> 8);
 }
 
 uint8_t
@@ -562,6 +685,19 @@ readP()
 }
 
 uint8_t
+readNOTIR()
+{
+	return (isNodeHigh(notir0) << 0) | 
+           (isNodeHigh(notir1) << 1) | 
+           (isNodeHigh(notir2) << 2) | 
+           (isNodeHigh(notir3) << 3) | 
+           (isNodeHigh(notir4) << 4) | 
+           (isNodeHigh(notir5) << 5) | 
+           (isNodeHigh(notir6) << 6) | 
+           (isNodeHigh(notir7) << 7);
+}
+
+uint8_t
 readSP()
 {
 	return (isNodeHigh(s0) << 0) | 
@@ -609,21 +745,7 @@ readPC()
 void
 chipStatus()
 {
-//exit(1);
-	PC = readPC();
-printf("PC = %x\n", PC);
-	if (PC >= 0xFF90) {
-		A = readA();
-		X = readX();
-		Y = readY();
-		S = readSP();
-		P = readP();
-		N = P >> 7;
-		Z = (P >> 1) & 1;
-		C = P & 1;
-		kernal_dispatch();
-	}
-	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X\n",
+	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X\n",
 			cycle,
 			isNodeHigh(clk0),
 			readAddressBus(),
@@ -634,7 +756,8 @@ printf("PC = %x\n", PC);
 			readX(),
 			readY(),
 			readSP(),
-			readP());
+			readP(),
+			readNOTIR() ^ 0xFF);
 #if 0
 	var machine1 =
 	        ' halfcyc:' + cycle +
@@ -746,7 +869,57 @@ step()
 #endif
 	halfStep();
 	cycle++;
-	chipStatus();
+	if (verbose)
+		chipStatus();
+
+	PC = readPC();
+	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0)) {
+		A = readA();
+		X = readX();
+		Y = readY();
+		S = readSP();
+		P = readP();
+		N = P >> 7;
+		Z = (P >> 1) & 1;
+		C = P & 1;
+
+#if 1
+		kernal_dispatch();
+
+		/*
+		LDA #P
+		PHA
+		LDA #A
+		LDX #X
+		LDY #Y
+		RTI
+		*/
+		memory[0xf800] = 0xA9;
+		memory[0xf801] = P;
+		memory[0xf802] = 0x48;
+		memory[0xf803] = 0xA9;
+		memory[0xf804] = A;
+		memory[0xf805] = 0xA2;
+		memory[0xf806] = X;
+		memory[0xf807] = 0xA0;
+		memory[0xf808] = Y;
+		memory[0xf809] = 0x40;
+
+#if 0
+		PC = memory[0x0100 + S+1] | memory[0x0100 + S + 2] << 8;
+		PC++;
+		S += 2;
+		P &= 0x7C; // clear N, Z, C
+		P |= (N << 7) | (Z << 1) | C;
+		
+		setA(A);
+		setX(X);
+		setY(Y);
+//		setP(P);
+//		recalcAllNodes(); 
+#endif
+#endif
+	}
 }
 
 void
@@ -775,8 +948,24 @@ go(n)
 	f = fopen("cbmbasic.bin", "r");
 	fread(memory + 0xA000, 1, 17591, f);
 	fclose(f);
+//	memset(memory + 0xFF90, 0x60, 0x70);
+	int addr;
+	for (addr = 0xFF90; addr < 0x10000; addr += 3) {
+		memory[addr+0] = 0x4C;
+		memory[addr+1] = 0x00;
+		memory[addr+2] = 0xF8;
+	}
+#if 0
 	memory[0xfffc] = 0x94;
 	memory[0xfffd] = 0xE3;
+#else
+	memory[0xf000] = 0x20;
+	memory[0xf001] = 0x94;
+	memory[0xf002] = 0xE3;
+	
+	memory[0xfffc] = 0x00;
+	memory[0xfffd] = 0xF0;
+#endif
 #endif
 	steps();
 }
