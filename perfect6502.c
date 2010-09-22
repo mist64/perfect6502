@@ -443,6 +443,7 @@ writeDataBus(uint8_t x)
 
 uint8_t mRead(uint16_t a)
 {
+	printf("PEEK($%04X) = $%02X\n", a, memory[a]);
 	return memory[a];
 }
 
@@ -703,14 +704,18 @@ initChip()
 	console.log(string);
 #endif
 
+#if 1
 	int i;
 	for (i = 0; i < 8; i++) {
 		setHigh(clk0);
 		setLow(clk0);
 	}
+#endif
 	setHigh(res);
+#if 0
 	for (i = 0; i < 18; i++)
 		halfStep();
+#endif
 	cycle = 0;
 //	chipStatus();
 }
@@ -742,9 +747,19 @@ go(n)
 #ifdef DEBUG
 	printf("%s\n", __func__);
 #endif
+
+#if 0
 	memcpy(memory, code, sizeof(code));
-	code[0xfffc] = 0x00;
-	code[0xfffd] = 0x00;
+	memory[0xfffc] = 0x00;
+	memory[0xfffd] = 0x00;
+#else
+	FILE *f;
+	f = fopen("cbmbasic.bin", "r");
+	fread(memory + 0xA000, 1, 17591, f);
+	fclose(f);
+	memory[0xfffc] = 0x94;
+	memory[0xfffd] = 0xE3;
+#endif
 	steps();
 }
 
