@@ -872,8 +872,8 @@ IOBASE() {
 
 int
 kernal_dispatch() {
-//{ printf("kernal_dispatch $%04X; ", PC); int i; printf("stack (%02X): ", S); for (i=S+1; i<0x100; i++) { printf("%02X ", RAM[0x0100+i]); } printf("\n"); }
-
+{ printf("kernal_dispatch $%04X; ", PC); int i; printf("stack (%02X): ", S); for (i=S+1; i<0x100; i++) { printf("%02X ", RAM[0x0100+i]); } printf("\n"); }
+exit(1);
 	unsigned int new_pc;
 	switch(PC) {
 		case 0x0073:	CHRGET();	break;

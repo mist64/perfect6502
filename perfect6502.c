@@ -12,6 +12,8 @@ typedef int BOOL;
 #define NO 0
 #define YES 1
 
+#define SWAP(a,b) {int *tmp = a; a = b; b = tmp; }
+
 #include "segdefs.h"
 #include "transdefs.h"
 #include "nodenames.h"
@@ -351,7 +353,8 @@ recalcNodeList(int *list, int count)
 	printf("%s list=", __func__);
 	printarray(list, count);
 #endif
-	int recalclist[2000];
+	int list1[2000];
+	int *recalclist = list1;
 	int recalccount = 0;
 	int i, j;
 	for (j = 0; j < 100; j++) {	// loop limiter
@@ -361,15 +364,10 @@ recalcNodeList(int *list, int count)
 		printf("%s iteration=%d, list=", __func__, j);
 		printarray(list, count);
 #endif
-//printf("%s:%d iteration=%d count=%d\n", __func__, __LINE__, j, count);
-//printf("before: %d\n", recalccount);
 		for (i = 0; i < count; i++)
 			recalcNode(list[i], recalclist, &recalccount);
-//printf("%s:%d iteration=%d recalccount=%d\n", __func__, __LINE__, j, recalccount);
-//printf("after: %d\n", recalccount);
-		for (i = 0; i < recalccount; i++)
-			list[i] = recalclist[i];
-//printf("%s:%d iteration=%d\n", __func__, __LINE__, j);
+		SWAP(list, recalclist);
+		
 		count = recalccount;
 		recalccount = 0;
 	}
