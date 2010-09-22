@@ -120,16 +120,19 @@ printarray(int *array, int count)
 }
 #endif
 
+int group[NODES];
+int groupcount;
+
 BOOL
-arrayContains(int *arr, int count, int el)
+arrayContains(int el)
 {
 #ifdef DEBUG
 	printf("%s el=%d, arr=", __func__, el);
 	printarray(arr, count);
 #endif
 	int i;
-	for (i = 0; i < count; i++) {
-		if (arr[i] == el) {
+	for (i = 0; i < groupcount; i++) {
+		if (group[i] == el) {
 			return YES;
 		}
 	}
@@ -159,10 +162,6 @@ recalcListContains(int el)
 	return recalc.bitmap[el];
 }
 
-
-int group[NODES];
-int groupcount;
-
 void addNodeToGroup(int i);
 
 void
@@ -189,7 +188,7 @@ addNodeToGroup(int i)
 	printf("%s %d, group=", __func__, i);
 	printarray(group, groupcount);
 #endif
-	if (arrayContains(group, groupcount, i))
+	if (arrayContains(i))
 		return;
 	group[groupcount++] = i;
 	if (i == ngnd)
@@ -208,9 +207,9 @@ getNodeValue()
 	printf("%s group=", __func__);
 	printarray(group, groupcount);
 #endif
-	if (arrayContains(group, groupcount, ngnd))
+	if (arrayContains(ngnd))
 		return STATE_GND;
-	if (arrayContains(group, groupcount, npwr))
+	if (arrayContains(npwr))
 		return STATE_VCC;
 	int flstate = STATE_UNDEFINED;
 	int i;
