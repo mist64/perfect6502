@@ -62,6 +62,10 @@ transistor_t transistors[TRANSISTORS];
 uint8_t memory[65536];
 int cycle;
 
+uint8_t A, X, Y, S, P;
+uint16_t PC;
+BOOL N, Z, C;
+
 void
 setupNodes()
 {
@@ -605,6 +609,20 @@ readPC()
 void
 chipStatus()
 {
+//exit(1);
+	PC = readPC();
+printf("PC = %x\n", PC);
+	if (PC >= 0xFF90) {
+		A = readA();
+		X = readX();
+		Y = readY();
+		S = readSP();
+		P = readP();
+		N = P >> 7;
+		Z = (P >> 1) & 1;
+		C = P & 1;
+		kernal_dispatch();
+	}
 	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X\n",
 			cycle,
 			isNodeHigh(clk0),
