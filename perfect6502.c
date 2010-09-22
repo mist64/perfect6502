@@ -160,14 +160,17 @@ recalcListContains(int el)
 }
 
 
-void addNodeToGroup(int i, int *group, int *groupcount);
+int group[NODES];
+int groupcount;
+
+void addNodeToGroup(int i);
 
 void
-addNodeTransistor(int node, int t, int *group, int *groupcount)
+addNodeTransistor(int node, int t)
 {
 #ifdef DEBUG
 	printf("%s n=%d, t=%d, group=", __func__, node, t);
-	printarray(group, *groupcount);
+	printarray(group, groupcount);
 #endif
 	if (!transistors[t].on)
 		return;
@@ -176,31 +179,30 @@ addNodeTransistor(int node, int t, int *group, int *groupcount)
 		other = transistors[t].c2;
 	if (transistors[t].c2 == node)
 		other = transistors[t].c1;
-	addNodeToGroup(other, group, groupcount);
+	addNodeToGroup(other);
 }
 
 void
-addNodeToGroup(int i, int *group, int *groupcount)
+addNodeToGroup(int i)
 {
 #ifdef DEBUG
 	printf("%s %d, group=", __func__, i);
-	printarray(group, *groupcount);
+	printarray(group, groupcount);
 #endif
-	if (arrayContains(group, *groupcount, i))
+	if (arrayContains(group, groupcount, i))
 		return;
-	group[*groupcount] = i;
-	(*groupcount)++;
+	group[groupcount++] = i;
 	if (i == ngnd)
 		return;
 	if (i == npwr)
 		return;
 	int t;
 	for (t = 0; t < nodes[i].c1c2count; t++)
-		addNodeTransistor(i, nodes[i].c1c2s[t], group, groupcount);
+		addNodeTransistor(i, nodes[i].c1c2s[t]);
 }
 
 int
-getNodeValue(int *group, int groupcount)
+getNodeValue()
 {
 #ifdef DEBUG
 	printf("%s group=", __func__);
@@ -238,8 +240,7 @@ addRecalcNode(int nn)
 		return;
 	if (recalcListContains(nn))
 		return;
-	recalc.list[recalc.count] = nn;
-	recalc.count++;
+	recalc.list[recalc.count++] = nn;
 	recalc.bitmap[nn] = 1;
 }
 
@@ -298,35 +299,18 @@ recalcNode(int node)
 	printf("%s node=%d, recalc.list=", __func__, node);
 	printarray(recalc.list, recalc.count);
 #endif
-	if (node == ngnd)
-		return;
-	if (node == npwr)
+	if (node == ngnd || node == npwr)
 		return;
 
-	int group[2000];
-	int groupcount = 0;
-	addNodeToGroup(node, group, &groupcount);
+	groupcount = 0;
+	addNodeToGroup(node);
 
-	int newv = getNodeValue(group, groupcount);
+	int newv = getNodeValue();
 	int i;
-#ifdef DEBUG
-	printf("%s %i, group=", __func__, node);
-	printarray(group, groupcount);
-#endif
 	for (i = 0; i < groupcount; i++) {
-//printf("i=%d\n", i);
-//printf("group[i]=%d\n", group[i]);
 		node_t n = nodes[group[i]];
-#ifdef DEBUG
-		if (n.state != newv)
-			printf("%s %d, states %d,%d\n", __func__, group[i], n.state, newv);
-#endif
 		nodes[group[i]].state = newv;
 		int t;
-#ifdef DEBUG
-		printf("loop x %d\n", n.gatecount);
-#endif
-//printf("there are %d gates\n", n.gatecount);
 		for (t = 0; t < n.gatecount; t++)
 			recalcTransistor(n.gates[t]);
 	}
