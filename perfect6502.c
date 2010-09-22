@@ -122,8 +122,7 @@ printarray(int *array, int count)
 
 int group[NODES];
 int groupcount;
-//int groupbitmap[NODES/sizeof(int)];
-char groupbitmap[NODES];
+int groupbitmap[NODES/sizeof(int)];
 
 BOOL
 arrayContains(int el)
@@ -137,8 +136,7 @@ arrayContains(int el)
 	}
 	return NO;
 #else
-	return groupbitmap[el];
-//	return (groupbitmap[el>>5] >> (el & 31)) & 1;
+	return (groupbitmap[el>>5] >> (el & 31)) & 1;
 #endif
 }
 
@@ -192,7 +190,7 @@ addNodeToGroup(int i)
 	if (arrayContains(i))
 		return;
 	group[groupcount++] = i;
-	groupbitmap[i] = 1;
+	groupbitmap[i>>5] |= 1 << (i & 31);
 	if (i == ngnd)
 		return;
 	if (i == npwr)
