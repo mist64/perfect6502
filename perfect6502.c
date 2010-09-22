@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -219,52 +219,56 @@ floatnode(int nn)
 		return;
 	node_t n = nodes[nn];
 	if (n.state == STATE_GND)
-		n.state = STATE_FL;
+		nodes[nn].state = STATE_FL;
 	if (n.state == STATE_PD)
-		n.state = STATE_FL;
+		nodes[nn].state = STATE_FL;
 	if (n.state == STATE_VCC)
-		n.state = STATE_FH;
+		nodes[nn].state = STATE_FH;
 	if (n.state == STATE_PU)
-		n.state = STATE_FH;
+		nodes[nn].state = STATE_FH;
 #ifdef DEBUG
 	printf("%s %i to state %d\n", __func__, nn, n.state);
 #endif
 }
 
 void
-turnTransistorOn(transistor_t t, int *recalclist, int *recalccount)
+turnTransistorOn(transistor_t *t, int *recalclist, int *recalccount)
 {
-	if (t.on)
+	if (t->on)
 		return;
 #ifdef DEBUG
-	printf("%s t%d, %d, %d, %d\n", __func__, t.name, t.gate, t.c1, t.c2);
+	printf("%s t%d, %d, %d, %d\n", __func__, t->name, t->gate, t->c1, t->c2);
 #endif
-	t.on = YES;
-	addRecalcNode(t.c1, recalclist, recalccount);
-	addRecalcNode(t.c2, recalclist, recalccount);
+	t->on = YES;
+	addRecalcNode(t->c1, recalclist, recalccount);
+	addRecalcNode(t->c2, recalclist, recalccount);
 }
 
 void
-turnTransistorOff(transistor_t t, int *recalclist, int *recalccount)
+turnTransistorOff(transistor_t *t, int *recalclist, int *recalccount)
 {
-	if (!t.on)
+	if (t->on)
 		return;
 #ifdef DEBUG
-	printf("%s t%d, %d, %d, %d\n", __func__, t.name, t.gate, t.c1, t.c2);
+	printf("%s t%d, %d, %d, %d\n", __func__, t->name, t->gate, t->c1, t->c2);
 #endif
-	t.on = NO;
-	floatnode(t.c1);
-	floatnode(t.c2);
-	addRecalcNode(t.c1, recalclist, recalccount);
-	addRecalcNode(t.c2, recalclist, recalccount);
+	t->on = NO;
+	floatnode(t->c1);
+	floatnode(t->c2);
+	addRecalcNode(t->c1, recalclist, recalccount);
+	addRecalcNode(t->c2, recalclist, recalccount);
 }
 
 BOOL
 isNodeHigh(int nn)
 {
 #ifdef DEBUG
-	printf("%s nn=%d\n", __func__, nn);
+	printf("%s nn=%d state=%d\n", __func__, nn, nodes[nn].state);
+	printf("%s nn=%d res=%d\n", __func__, nn, (nodes[nn].state == STATE_VCC) ||
+            (nodes[nn].state == STATE_PU) ||
+            (nodes[nn].state == STATE_FH));
 #endif
+//printf("%s nn=%d res=%d\n", __func__, nn, nodes[nn].state);
 	return ((nodes[nn].state == STATE_VCC) ||
             (nodes[nn].state == STATE_PU) ||
             (nodes[nn].state == STATE_FH));
@@ -277,8 +281,8 @@ recalcTransistor(int tn, int *recalclist, int *recalccount)
 	printf("%s tn=%d, recalclist=", __func__, tn);
 	printarray(recalclist, *recalccount);
 #endif
-	transistor_t t = transistors[tn];
-	if (isNodeHigh(t.gate))
+	transistor_t *t = &transistors[tn];
+	if (isNodeHigh(t->gate))
 		turnTransistorOn(t, recalclist, recalccount);
 	else
 		turnTransistorOff(t, recalclist, recalccount);
@@ -312,7 +316,7 @@ recalcNode(int node, int *recalclist, int *recalccount)
 		if (n.state != newv)
 			printf("%s %d, states %d,%d\n", __func__, group[i], n.state, newv);
 #endif
-		n.state = newv;
+		nodes[group[i]].state = newv;
 		int t;
 #ifdef DEBUG
 		printf("loop x %d\n", n.gatecount);
@@ -339,8 +343,10 @@ recalcNodeList(int *list, int count)
 		printf("%s iteration=%d, list=", __func__, j);
 		printarray(list, count);
 #endif
+printf("before: %d\n", recalccount);
 		for (i = 0; i < count; i++)
 			recalcNode(list[i], recalclist, &recalccount);
+printf("after: %d\n", recalccount);
 		for (i = 0; i < recalccount; i++)
 			list[i] = recalclist[i];
 		count = recalccount;
@@ -402,13 +408,12 @@ writeDataBus(uint8_t x)
 		case 6: nn = db6; break;
 		case 7: nn = db7; break;
 		}
-		node_t n = nodes[nn];
 		if ((x & 1) == 0) {
-			n.pulldown = YES;
-			n.pullup = NO;
+			nodes[nn].pulldown = YES;
+			nodes[nn].pullup = NO;
 		} else {
-			n.pulldown = NO;
-			n.pullup = YES;
+			nodes[nn].pulldown = NO;
+			nodes[nn].pullup = YES;
 		}
 		recalcs[recalcscount++] = nn;
 		x >>= 1;

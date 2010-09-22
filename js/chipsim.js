@@ -24,10 +24,12 @@ var ctrace = true;
 var loglevel = 3;
 
 function recalcNodeList(list){
+	console.log("recalcNodeList list=" + list);
 	var n = list[0];
 	var recalclist = new Array();
 	for(var j=0;j<100;j++){		// loop limiter
 		if(list.length==0) return;
+		console.log("recalcNodeList iteration=" + j + ", list=" + list);
 		if(ctrace) console.log(j, list);
 		for(var i in list) recalcNode(list[i], recalclist);
 		list = recalclist;
@@ -37,6 +39,7 @@ function recalcNodeList(list){
 }
 
 function recalcNode(node, recalclist){
+	console.log("recalcNode node=" + node + ", recalclist=" + recalclist);
 	if(node==ngnd) return;
 	if(node==npwr) return;
 	var group = getNodeGroup(node);
@@ -51,6 +54,7 @@ function recalcNode(node, recalclist){
 }
 
 function recalcTransistor(tn, recalclist){
+	console.log("recalcTransistor tn=" + tn +", recalclist=" + recalclist);
 	var t = transistors[tn];
 	if(isNodeHigh(t.gate)) turnTransistorOn(t, recalclist);
 	else turnTransistorOff(t, recalclist);
@@ -99,6 +103,7 @@ function getNodeGroup(i){
 }
 
 function addNodeToGroup(i, group){
+	console.log("addNodeToGroup " + i + ", group=", group);
 	if(arrayContains(group, i)) return;
 	group.push(i);
 	if(i==ngnd) return;
@@ -134,6 +139,8 @@ function getNodeValue(group){
 
 
 function isNodeHigh(nn){
+	console.log("isNodeHigh nn=" + nn + " state=" + nodes[nn].state);
+	console.log("isNodeHigh nn=" + nn + " res=" + arrayContains(['vcc','pu','fh'], nodes[nn].state));
 	return arrayContains(['vcc','pu','fh'], nodes[nn].state);
 }
 
