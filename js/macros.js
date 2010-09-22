@@ -53,7 +53,7 @@ function initChip(){
 	setLow('clk0');
 	setHigh('rdy'); setLow('so');
 	setHigh('irq'); setHigh('nmi');
-//	recalcNodeList(allNodes()); 
+	recalcNodeList(allNodes()); 
 
 	var string = '';
 	for (var i in nodes) {
@@ -67,9 +67,9 @@ function initChip(){
 	}
 	console.log(string);
 
-//	for(var i=0;i<8;i++){setHigh('clk0'), setLow('clk0');}
-//	setHigh('res');
-//	for(var i=0;i<18;i++){halfStep();}
+	for(var i=0;i<8;i++){setHigh('clk0'), setLow('clk0');}
+	setHigh('res');
+	for(var i=0;i<18;i++){halfStep();}
 	cycle = 0;
 	chipStatus();
 }

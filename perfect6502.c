@@ -183,7 +183,7 @@ getNodeValue(int *group, int groupcount)
 		return STATE_GND;
 	if (arrayContains(group, groupcount, npwr))
 		return STATE_VCC;
-	int flstate;
+	int flstate = STATE_UNDEFINED;
 	int i;
 	for (i = 0; i < groupcount; i++) {
 		int nn = group[i];
@@ -490,6 +490,7 @@ readDataBus()
 void
 mWrite(uint16_t a, uint8_t d)
 {
+	printf("POKE $0x%04X, $%02X\n", a, d);
 	memory[a] = d;
 }
 
