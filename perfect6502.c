@@ -122,7 +122,8 @@ printarray(int *array, int count)
 
 int group[NODES];
 int groupcount;
-int groupbitmap[NODES];
+//int groupbitmap[NODES/sizeof(int)];
+char groupbitmap[NODES];
 
 BOOL
 arrayContains(int el)
@@ -137,13 +138,14 @@ arrayContains(int el)
 	return NO;
 #else
 	return groupbitmap[el];
+//	return (groupbitmap[el>>5] >> (el & 31)) & 1;
 #endif
 }
 
 typedef struct {
 	int *list;
 	int count;
-	int *bitmap;
+	char *bitmap;
 } list_t;
 
 list_t recalc;
