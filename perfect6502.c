@@ -250,7 +250,7 @@ turnTransistorOn(transistor_t *t, int *recalclist, int *recalccount)
 void
 turnTransistorOff(transistor_t *t, int *recalclist, int *recalccount)
 {
-	if (t->on)
+	if (!t->on)
 		return;
 #ifdef DEBUG
 	printf("%s t%d, %d, %d, %d\n", __func__, t->name, t->gate, t->c1, t->c2);
@@ -346,15 +346,15 @@ recalcNodeList(int *list, int count)
 		printf("%s iteration=%d, list=", __func__, j);
 		printarray(list, count);
 #endif
-printf("%s:%d iteration=%d count=%d\n", __func__, __LINE__, j, count);
+//printf("%s:%d iteration=%d count=%d\n", __func__, __LINE__, j, count);
 //printf("before: %d\n", recalccount);
 		for (i = 0; i < count; i++)
 			recalcNode(list[i], recalclist, &recalccount);
-printf("%s:%d iteration=%d recalccount=%d\n", __func__, __LINE__, j, recalccount);
+//printf("%s:%d iteration=%d recalccount=%d\n", __func__, __LINE__, j, recalccount);
 //printf("after: %d\n", recalccount);
 		for (i = 0; i < recalccount; i++)
 			list[i] = recalclist[i];
-printf("%s:%d iteration=%d\n", __func__, __LINE__, j);
+//printf("%s:%d iteration=%d\n", __func__, __LINE__, j);
 		count = recalccount;
 		recalccount = 0;
 	}

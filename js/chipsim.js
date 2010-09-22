@@ -112,6 +112,7 @@ function addNodeToGroup(i, group){
 }
 
 function addNodeTransistor(node, t, group){
+	console.log("addNodeTransistor n=" + node + ", t=" + t + ", group=" + group);
 	var tr = transistors[t];
 	if(!tr.on) return;
 	var other;
