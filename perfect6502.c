@@ -1,8 +1,11 @@
+//#define DEBUG
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
 typedef int BOOL;
 
 #define NO 0
@@ -33,8 +36,8 @@ typedef struct {
 	BOOL pullup;
 	BOOL pulldown;
 	int state;
-	int gates[50];
-	int c1c2s[50];
+	int gates[1800];
+	int c1c2s[1800];
 	int gatecount;
 	int c1c2count;
 } node_t;
@@ -43,13 +46,15 @@ node_t nodes[1725];
 
 #define EMPTY -1
 
-struct {
+typedef struct {
 	int name;
 	BOOL on;
 	int gate;
 	int c1;
 	int c2;
-} transistors[3510];
+} transistor_t;
+
+transistor_t transistors[3510];
 
 uint8_t memory[65536];
 int cycle;
@@ -85,14 +90,36 @@ setupTransistors()
 	}
 }
 
+#ifdef DEBUG
+void
+printarray(int *array, int count)
+{
+	int i;
+	for (i = 0; i < count; i++)
+		printf("%d ", array[i]);
+	printf("\n");
+}
+#endif
+
 BOOL
 arrayContains(int *arr, int count, int el)
 {
+#ifdef DEBUG
+	printf("%s el=%d, arr=", __func__, el);
+	printarray(arr, count);
+#endif
 	int i;
 	for (i = 0; i < count; i++) {
-		if (arr[i] == el)
+		if (arr[i] == el) {
+#ifdef DEBUG
+			printf("YES\n");
+#endif
 			return YES;
+		}
 	}
+#ifdef DEBUG
+	printf("NO\n");
+#endif
 	return NO;
 }
 
@@ -101,6 +128,10 @@ void addNodeToGroup(int i, int *group, int *groupcount);
 void
 addNodeTransistor(int node, int t, int *group, int *groupcount)
 {
+#ifdef DEBUG
+	printf("%s n=%d, t=%d, group=", __func__, node, t);
+	printarray(group, *groupcount);
+#endif
 	if (!transistors[t].on)
 		return;
 	int other;
@@ -114,9 +145,14 @@ addNodeTransistor(int node, int t, int *group, int *groupcount)
 void
 addNodeToGroup(int i, int *group, int *groupcount)
 {
+#ifdef DEBUG
+	printf("%s %d, group=", __func__, i);
+	printarray(group, *groupcount);
+#endif
 	if (arrayContains(group, *groupcount, i))
 		return;
-	group[*groupcount++] = i;
+	group[*groupcount] = i;
+	(*groupcount)++;
 	if (i == ngnd)
 		return;
 	if (i == npwr)
@@ -129,6 +165,10 @@ addNodeToGroup(int i, int *group, int *groupcount)
 int
 getNodeValue(int *group, int groupcount)
 {
+#ifdef DEBUG
+	printf("%s group=", __func__);
+	printarray(group, groupcount);
+#endif
 	if (arrayContains(group, groupcount, ngnd))
 		return STATE_GND;
 	if (arrayContains(group, groupcount, npwr))
@@ -151,39 +191,154 @@ getNodeValue(int *group, int groupcount)
 }
 
 void
+addRecalcNode(int nn, int *recalclist, int *recalccount)
+{
+#ifdef DEBUG
+	printf("%s nn=%d recalclist=", __func__, nn);
+	printarray(recalclist, *recalccount);
+#endif
+	if (nn == ngnd)
+		return;
+	if (nn == npwr)
+		return;
+	if (arrayContains(recalclist, *recalccount, nn))
+		return;
+	recalclist[*recalccount] = nn;
+	(*recalccount)++;
+}
+
+void
+floatnode(int nn)
+{
+#ifdef DEBUG
+	printf("%s nn=%d\n", __func__, nn);
+#endif
+	if (nn == ngnd)
+		return;
+	if (nn == npwr)
+		return;
+	node_t n = nodes[nn];
+	if (n.state == STATE_GND)
+		n.state = STATE_FL;
+	if (n.state == STATE_PD)
+		n.state = STATE_FL;
+	if (n.state == STATE_VCC)
+		n.state = STATE_FH;
+	if (n.state == STATE_PU)
+		n.state = STATE_FH;
+#ifdef DEBUG
+	printf("%s %i to state %d\n", __func__, nn, n.state);
+#endif
+}
+
+void
+turnTransistorOn(transistor_t t, int *recalclist, int *recalccount)
+{
+	if (t.on)
+		return;
+#ifdef DEBUG
+	printf("%s t%d, %d, %d, %d\n", __func__, t.name, t.gate, t.c1, t.c2);
+#endif
+	t.on = YES;
+	addRecalcNode(t.c1, recalclist, recalccount);
+	addRecalcNode(t.c2, recalclist, recalccount);
+}
+
+void
+turnTransistorOff(transistor_t t, int *recalclist, int *recalccount)
+{
+	if (!t.on)
+		return;
+#ifdef DEBUG
+	printf("%s t%d, %d, %d, %d\n", __func__, t.name, t.gate, t.c1, t.c2);
+#endif
+	t.on = NO;
+	floatnode(t.c1);
+	floatnode(t.c2);
+	addRecalcNode(t.c1, recalclist, recalccount);
+	addRecalcNode(t.c2, recalclist, recalccount);
+}
+
+BOOL
+isNodeHigh(int nn)
+{
+#ifdef DEBUG
+	printf("%s nn=%d\n", __func__, nn);
+#endif
+	return ((nodes[nn].state == STATE_VCC) ||
+            (nodes[nn].state == STATE_PU) ||
+            (nodes[nn].state == STATE_FH));
+}
+
+void
+recalcTransistor(int tn, int *recalclist, int *recalccount)
+{
+#ifdef DEBUG
+	printf("%s tn=%d, recalclist=", __func__, tn);
+	printarray(recalclist, *recalccount);
+#endif
+	transistor_t t = transistors[tn];
+	if (isNodeHigh(t.gate))
+		turnTransistorOn(t, recalclist, recalccount);
+	else
+		turnTransistorOff(t, recalclist, recalccount);
+}
+
+void
 recalcNode(int node, int *recalclist, int *recalccount)
 {
+#ifdef DEBUG
+	printf("%s node=%d, recalclist=", __func__, node);
+	printarray(recalclist, *recalccount);
+#endif
 	if (node == ngnd)
 		return;
 	if (node == npwr)
 		return;
 
-	int *group = malloc(1000);
+	int group[2000];
 	int groupcount = 0;
 	addNodeToGroup(node, group, &groupcount);
 
-
-#if 0 
-	var newv = getNodeValue(group);
-	if(ctrace) console.log('recalc', node, group);
-	for(var i in group){
-		var n = nodes[group[i]];
-		if(n.state!=newv && ctrace) console.log(group[i], n.state, newv);
-		n.state = newv;
-		for(var t in n.gates) recalcTransistor(n.gates[t], recalclist);
-	}
+	int newv = getNodeValue(group, groupcount);
+	int i;
+#ifdef DEBUG
+	printf("%s %i, group=", __func__, node);
+	printarray(group, groupcount);
 #endif
+	for (i = 0; i < groupcount; i++) {
+		node_t n = nodes[group[i]];
+#ifdef DEBUG
+		if (n.state != newv)
+			printf("%s %d, states %d,%d\n", __func__, group[i], n.state, newv);
+#endif
+		n.state = newv;
+		int t;
+#ifdef DEBUG
+		printf("loop x %d\n", n.gatecount);
+#endif
+		for (t = 0; t < n.gatecount; t++)
+			recalcTransistor(n.gates[t], recalclist, recalccount);
+	}
 }
 
 void
 recalcNodeList(int *list, int count)
 {
-	int recalclist[1000];
+#ifdef DEBUG
+	printf("%s list=", __func__);
+	printarray(list, count);
+#endif
+	int recalclist[2000];
 	int recalccount = 0;
 	int i, j;
 	for (j = 0; j < 100; j++) {	// loop limiter
 		if (!count)
 			return;
+#ifdef DEBUG
+		printf("%s iteration=%d, list=", __func__, j);
+		printarray(list, count);
+#endif
 		for (i = 0; i < count; i++)
 			recalcNode(list[i], recalclist, &recalccount);
 		for (i = 0; i < recalccount; i++)
@@ -194,60 +349,289 @@ recalcNodeList(int *list, int count)
 }
 
 void
-recalcListOfOne(int nn)
-{
-	printf("TODO %s\n", __func__);
-}
-
-void
 recalcAllNodes()
 {
-	printf("TODO %s\n", __func__);
+#ifdef DEBUG
+	printf("%s\n", __func__);
+#endif
+	int count = sizeof(nodes)/sizeof(*nodes);
+	int list[count];
+	int i;
+	for (i = 0; i < count; i++)
+		list[i] = i;
+	recalcNodeList(list, count);
 }
 
 void
 setLow(int nn)
 {
+#ifdef DEBUG
+	printf("%s nn=%d\n", __func__, nn);
+#endif
 	nodes[nn].pullup = NO;
 	nodes[nn].pulldown = YES;
-	recalcListOfOne(nn);
+	recalcNodeList(&nn, 1);
 }
 
 void
 setHigh(int nn)
 {
+#ifdef DEBUG
+	printf("%s nn=%d\n", __func__, nn);
+#endif
 	nodes[nn].pullup = YES;
 	nodes[nn].pulldown = NO;
-	recalcListOfOne(nn);
+	recalcNodeList(&nn, 1);
 }
 
-BOOL
-isNodeHigh(int node)
+void
+writeDataBus(uint8_t x)
 {
-	return NO;
+	int recalcs[1800];
+	int recalcscount = 0;
+	int i;
+	for (i = 0; i < 8; i++) {
+		int nn;
+		switch (i) {
+		case 0: nn = db0; break;
+		case 1: nn = db1; break;
+		case 2: nn = db2; break;
+		case 3: nn = db3; break;
+		case 4: nn = db4; break;
+		case 5: nn = db5; break;
+		case 6: nn = db6; break;
+		case 7: nn = db7; break;
+		}
+		node_t n = nodes[nn];
+		if ((x & 1) == 0) {
+			n.pulldown = YES;
+			n.pullup = NO;
+		} else {
+			n.pulldown = NO;
+			n.pullup = YES;
+		}
+		recalcs[recalcscount++] = nn;
+		x >>= 1;
+	}
+	recalcNodeList(recalcs, recalcscount);
+}
+
+uint8_t mRead(uint16_t a)
+{
+	return memory[a];
+}
+
+uint16_t
+readAddressBus()
+{
+	return (isNodeHigh(ab0) << 0) | 
+           (isNodeHigh(ab1) << 1) | 
+           (isNodeHigh(ab2) << 2) | 
+           (isNodeHigh(ab3) << 3) | 
+           (isNodeHigh(ab4) << 4) | 
+           (isNodeHigh(ab5) << 5) | 
+           (isNodeHigh(ab6) << 6) | 
+           (isNodeHigh(ab7) << 7) | 
+           (isNodeHigh(ab8) << 8) | 
+           (isNodeHigh(ab9) << 9) | 
+           (isNodeHigh(ab10) << 10) | 
+           (isNodeHigh(ab11) << 11) | 
+           (isNodeHigh(ab12) << 12) | 
+           (isNodeHigh(ab13) << 13) | 
+           (isNodeHigh(ab14) << 14) | 
+           (isNodeHigh(ab15) << 15); 
 }
 
 void
 handleBusRead()
 {
-	printf("TODO %s\n", __func__);
+	if (isNodeHigh(rw))
+		writeDataBus(mRead(readAddressBus()));
+}
+
+uint8_t
+readDataBus()
+{
+	return (isNodeHigh(db0) << 0) | 
+           (isNodeHigh(db1) << 1) | 
+           (isNodeHigh(db2) << 2) | 
+           (isNodeHigh(db3) << 3) | 
+           (isNodeHigh(db4) << 4) | 
+           (isNodeHigh(db5) << 5) | 
+           (isNodeHigh(db6) << 6) | 
+           (isNodeHigh(db7) << 7);
+}
+
+void
+mWrite(uint16_t a, uint8_t d)
+{
+	memory[a] = d;
 }
 
 void
 handleBusWrite()
 {
-	printf("TODO %s\n", __func__);
+	if (!isNodeHigh(rw)) {
+		uint16_t a = readAddressBus();
+		uint8_t d = readDataBus();
+		mWrite(a,d);
+	}
+}
+
+uint8_t
+readA()
+{
+	return (isNodeHigh(a0) << 0) | 
+           (isNodeHigh(a1) << 1) | 
+           (isNodeHigh(a2) << 2) | 
+           (isNodeHigh(a3) << 3) | 
+           (isNodeHigh(a4) << 4) | 
+           (isNodeHigh(a5) << 5) | 
+           (isNodeHigh(a6) << 6) | 
+           (isNodeHigh(a7) << 7);
+}
+
+uint8_t
+readX()
+{
+	return (isNodeHigh(x0) << 0) | 
+           (isNodeHigh(x1) << 1) | 
+           (isNodeHigh(x2) << 2) | 
+           (isNodeHigh(x3) << 3) | 
+           (isNodeHigh(x4) << 4) | 
+           (isNodeHigh(x5) << 5) | 
+           (isNodeHigh(x6) << 6) | 
+           (isNodeHigh(x7) << 7);
+}
+
+uint8_t
+readY()
+{
+	return (isNodeHigh(y0) << 0) | 
+           (isNodeHigh(y1) << 1) | 
+           (isNodeHigh(y2) << 2) | 
+           (isNodeHigh(y3) << 3) | 
+           (isNodeHigh(y4) << 4) | 
+           (isNodeHigh(y5) << 5) | 
+           (isNodeHigh(y6) << 6) | 
+           (isNodeHigh(y7) << 7);
+}
+
+uint8_t
+readP()
+{
+	return (isNodeHigh(p0) << 0) | 
+           (isNodeHigh(p1) << 1) | 
+           (isNodeHigh(p2) << 2) | 
+           (isNodeHigh(p3) << 3) | 
+           (isNodeHigh(p4) << 4) | 
+           (isNodeHigh(p5) << 5) | 
+           (isNodeHigh(p6) << 6) | 
+           (isNodeHigh(p7) << 7);
+}
+
+uint8_t
+readSP()
+{
+	return (isNodeHigh(s0) << 0) | 
+           (isNodeHigh(s1) << 1) | 
+           (isNodeHigh(s2) << 2) | 
+           (isNodeHigh(s3) << 3) | 
+           (isNodeHigh(s4) << 4) | 
+           (isNodeHigh(s5) << 5) | 
+           (isNodeHigh(s6) << 6) | 
+           (isNodeHigh(s7) << 7);
+}
+
+uint8_t
+readPCL()
+{
+	return (isNodeHigh(pcl0) << 0) | 
+           (isNodeHigh(pcl1) << 1) | 
+           (isNodeHigh(pcl2) << 2) | 
+           (isNodeHigh(pcl3) << 3) | 
+           (isNodeHigh(pcl4) << 4) | 
+           (isNodeHigh(pcl5) << 5) | 
+           (isNodeHigh(pcl6) << 6) | 
+           (isNodeHigh(pcl7) << 7);
+}
+
+uint8_t
+readPCH()
+{
+	return (isNodeHigh(pch0) << 0) | 
+           (isNodeHigh(pch1) << 1) | 
+           (isNodeHigh(pch2) << 2) | 
+           (isNodeHigh(pch3) << 3) | 
+           (isNodeHigh(pch4) << 4) | 
+           (isNodeHigh(pch5) << 5) | 
+           (isNodeHigh(pch6) << 6) | 
+           (isNodeHigh(pch7) << 7);
+}
+
+uint16_t
+readPC()
+{
+	return (readPCH() << 8) | readPCL();
 }
 
 void
 chipStatus()
 {
-
+	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X\n",
+			cycle,
+			isNodeHigh(clk0),
+			readAddressBus(),
+	        readDataBus(),
+	        isNodeHigh(rw),
+			readPC(),
+			readA(),
+			readX(),
+			readY(),
+			readSP(),
+			readP());
+#if 0
+	var machine1 =
+	        ' halfcyc:' + cycle +
+	        ' phi0:' + readBit('clk0') +
+                ' AB:' + hexWord(ab) +
+	        ' D:' + hexByte(readDataBus()) +
+	        ' RnW:' + readBit('rw');
+	var machine2 =
+	        ' PC:' + hexWord(readPC()) +
+	        ' A:' + hexByte(readA()) +
+	        ' X:' + hexByte(readX()) +
+	        ' Y:' + hexByte(readY()) +
+	        ' SP:' + hexByte(readSP()) +
+	        ' ' + readPstring();
+	var machine3 =
+	        ' Sync:' + readBit('sync')
+		' IRQ:' + readBit('irq') +
+	        ' NMI:' + readBit('nmi');
+	var machine4 =
+	        ' IR:' + hexByte(255 - readBits('notir', 8)) +
+	        ' idl:' + hexByte(255 - readBits('idl', 8)) +
+	        ' alu:' + hexByte(255 - readBits('alu', 8)) +
+	        ' TCstate:' + readBit('clock1') + readBit('clock2') +
+                	readBit('t2') + readBit('t3') + readBit('t4') + readBit('t5');
+        var machine5 =
+                ' notRdy0:' + readBit('notRdy0') +
+                ' fetch:'   + readBit('fetch') +
+                ' clearIR:' + readBit('clearIR') +
+                ' D1x1:'    + readBit('D1x1');
+        setStatus(machine1 + "<br>" + machine2);
+	if (loglevel>2 && ctrace) {
+		console.log(machine1 + " " + machine2 + " " + machine3 + " " + machine4 + " " + machine5);
+	}
+#endif
 }
 
 void
 halfStep()
 {
+#ifdef DEBUG
+	printf("%s\n", __func__);
+#endif
 	if (isNodeHigh(clk0)) {
 		setLow(clk0);
 		handleBusRead();
@@ -260,6 +644,9 @@ halfStep()
 void
 initChip()
 {
+#ifdef DEBUG
+	printf("%s\n", __func__);
+#endif
 	int nn;
 	for (nn = 0; nn < sizeof(nodes)/sizeof(*nodes); nn++)
 		nodes[nn].state = STATE_FL;
@@ -305,7 +692,9 @@ initChip()
 void
 step()
 {
+#ifdef DEBUG
 	printf("%s\n", __func__);
+#endif
 	halfStep();
 	cycle++;
 	chipStatus();
@@ -314,6 +703,9 @@ step()
 void
 steps()
 {
+#ifdef DEBUG
+	printf("%s\n", __func__);
+#endif
 	for (;;)
 		step();
 }
@@ -321,6 +713,9 @@ steps()
 void
 go(n)
 {
+#ifdef DEBUG
+	printf("%s\n", __func__);
+#endif
 	memcpy(memory, code, sizeof(code));
 	code[0xfffc] = 0x00;
 	code[0xfffd] = 0x00;
