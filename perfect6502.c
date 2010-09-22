@@ -9,6 +9,8 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef int BOOL;
 
+typedef uint16_t nodenum_t;
+
 #define NO 0
 #define YES 1
 
@@ -44,8 +46,8 @@ typedef struct {
 	BOOL pullup;
 	BOOL pulldown;
 	int state;
-	int gates[NODES];
-	int c1c2s[2*NODES];
+	nodenum_t gates[NODES];
+	nodenum_t c1c2s[2*NODES];
 	int gatecount;
 	int c1c2count;
 } node_t;
@@ -57,9 +59,9 @@ node_t nodes[NODES];
 typedef struct {
 	int name;
 	BOOL on;
-	int gate;
-	int c1;
-	int c2;
+	nodenum_t gate;
+	nodenum_t c1;
+	nodenum_t c2;
 } transistor_t;
 
 transistor_t transistors[TRANSISTORS];
@@ -88,9 +90,9 @@ setupTransistors()
 {
 	int i;
 	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
-		int gate = transdefs[i].gate;
-		int c1 = transdefs[i].c1;
-		int c2 = transdefs[i].c2;
+		nodenum_t gate = transdefs[i].gate;
+		nodenum_t c1 = transdefs[i].c1;
+		nodenum_t c2 = transdefs[i].c2;
 		transistors[i].name = i;
 		transistors[i].on = NO;
 		transistors[i].gate = gate;
@@ -111,7 +113,7 @@ setupTransistors()
 
 #ifdef DEBUG
 void
-printarray(int *array, int count)
+printarray(nodenum_t *array, int count)
 {
 	int i;
 	for (i = 0; i < count; i++)
@@ -120,12 +122,12 @@ printarray(int *array, int count)
 }
 #endif
 
-int group[NODES];
+nodenum_t group[NODES];
 int groupcount;
 int groupbitmap[NODES/sizeof(int)];
 
 BOOL
-arrayContains(int el)
+arrayContains(nodenum_t el)
 {
 #if 0
 	int i;
@@ -141,7 +143,7 @@ arrayContains(int el)
 }
 
 typedef struct {
-	int *list;
+	nodenum_t *list;
 	int count;
 	char *bitmap;
 } list_t;
@@ -156,15 +158,15 @@ clearRecalc()
 }
 
 BOOL
-recalcListContains(int el)
+recalcListContains(nodenum_t el)
 {
 	return recalc.bitmap[el];
 }
 
-void addNodeToGroup(int i);
+void addNodeToGroup(nodenum_t i);
 
 void
-addNodeTransistor(int node, int t)
+addNodeTransistor(nodenum_t node, int t)
 {
 #ifdef DEBUG
 	printf("%s n=%d, t=%d, group=", __func__, node, t);
@@ -172,7 +174,7 @@ addNodeTransistor(int node, int t)
 #endif
 	if (!transistors[t].on)
 		return;
-	int other;
+	nodenum_t other;
 	if (transistors[t].c1 == node)
 		other = transistors[t].c2;
 	if (transistors[t].c2 == node)
@@ -181,7 +183,7 @@ addNodeTransistor(int node, int t)
 }
 
 void
-addNodeToGroup(int i)
+addNodeToGroup(nodenum_t i)
 {
 #ifdef DEBUG
 	printf("%s %d, group=", __func__, i);
@@ -214,7 +216,7 @@ getNodeValue()
 	int flstate = STATE_UNDEFINED;
 	int i;
 	for (i = 0; i < groupcount; i++) {
-		int nn = group[i];
+		nodenum_t nn = group[i];
 		node_t n = nodes[nn];
 		if (n.pullup)
 			return STATE_PU;
@@ -229,7 +231,7 @@ getNodeValue()
 }
 
 void
-addRecalcNode(int nn)
+addRecalcNode(nodenum_t nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d recalc.list=", __func__, nn);
@@ -244,7 +246,7 @@ addRecalcNode(int nn)
 }
 
 void
-floatnode(int nn)
+floatnode(nodenum_t nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
@@ -262,7 +264,7 @@ floatnode(int nn)
 }
 
 BOOL
-isNodeHigh(int nn)
+isNodeHigh(nodenum_t nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d state=%d\n", __func__, nn, nodes[nn].state);
@@ -292,7 +294,7 @@ recalcTransistor(int tn)
 }
 
 void
-recalcNode(int node)
+recalcNode(nodenum_t node)
 {
 #ifdef DEBUG
 	printf("%s node=%d, recalc.list=", __func__, node);
@@ -317,15 +319,15 @@ recalcNode(int node)
 }
 
 void
-recalcNodeList(int *list, int count)
+recalcNodeList(nodenum_t *list, int count)
 {
 #ifdef DEBUG
 	printf("%s list=", __func__);
 	printarray(list, count);
 #endif
-	int list1[NODES];
-	int bitmap1[NODES];
-	int bitmap2[NODES];
+	nodenum_t list1[NODES];
+	char bitmap1[NODES];
+	char bitmap2[NODES];
 
 	list_t current;
 	current.list = list;
@@ -360,7 +362,7 @@ recalcAllNodes()
 	printf("%s\n", __func__);
 #endif
 	printf("%s count=%d\n", __func__, NODES);
-	int list[NODES];
+	nodenum_t list[NODES];
 	int i;
 	for (i = 0; i < NODES; i++)
 		list[i] = i;
@@ -368,33 +370,33 @@ recalcAllNodes()
 }
 
 void
-setLow(int nn)
+setLow(nodenum_t nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
 	nodes[nn].pullup = NO;
 	nodes[nn].pulldown = YES;
-	int list[NODES];
+	nodenum_t list[NODES];
 	list[0] = nn;
 	recalcNodeList(list, 1);
 }
 
 void
-setHigh(int nn)
+setHigh(nodenum_t nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
 	nodes[nn].pullup = YES;
 	nodes[nn].pulldown = NO;
-	int list[NODES];
+	nodenum_t list[NODES];
 	list[0] = nn;
 	recalcNodeList(list, 1);
 }
 
 void
-setHighLow(int nn, BOOL val)
+setHighLow(nodenum_t nn, BOOL val)
 {
 	if (val)
 		setHigh(nn);
@@ -405,11 +407,11 @@ setHighLow(int nn, BOOL val)
 void
 writeDataBus(uint8_t x)
 {
-	int recalcs[NODES];
+	nodenum_t recalcs[NODES];
 	int recalcscount = 0;
 	int i;
 	for (i = 0; i < 8; i++) {
-		int nn;
+		nodenum_t nn;
 		switch (i) {
 		case 0: nn = db0; break;
 		case 1: nn = db1; break;
@@ -793,7 +795,7 @@ initChip()
 #ifdef DEBUG
 	printf("%s\n", __func__);
 #endif
-	int nn;
+	nodenum_t nn;
 	for (nn = 0; nn < NODES; nn++)
 		nodes[nn].state = STATE_FL;
 	nodes[ngnd].state = STATE_GND;
