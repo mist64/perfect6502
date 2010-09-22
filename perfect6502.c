@@ -12,7 +12,7 @@ typedef int BOOL;
 #define NO 0
 #define YES 1
 
-#define SWAP(a,b) {int *tmp = a; a = b; b = tmp; }
+#define SWAPLIST(a,b) {list_t tmp = a; a = b; b = tmp; }
 
 #include "segdefs.h"
 #include "transdefs.h"
@@ -136,6 +136,30 @@ arrayContains(int *arr, int count, int el)
 	return NO;
 }
 
+typedef struct {
+	int *list;
+	int count;
+	int *bitmap;
+} list_t;
+
+list_t recalc;
+
+void
+clearRecalc()
+{
+	int i;
+	for (i = 0; i < NODES; i++)
+		recalc.bitmap[i] = 0;
+	recalc.count = 0;
+}
+
+BOOL
+recalcListContains(int el)
+{
+	return recalc.bitmap[el];
+}
+
+
 void addNodeToGroup(int i, int *group, int *groupcount);
 
 void
@@ -203,24 +227,20 @@ getNodeValue(int *group, int groupcount)
 	return flstate;
 }
 
-int *recalclist;
-int recalccount;
-
 void
 addRecalcNode(int nn)
 {
 #ifdef DEBUG
-	printf("%s nn=%d recalclist=", __func__, nn);
-	printarray(recalclist, recalccount);
+	printf("%s nn=%d recalc.list=", __func__, nn);
+	printarray(recalc.list, recalc.count);
 #endif
-	if (nn == ngnd)
+	if (nn == ngnd || nn == npwr)
 		return;
-	if (nn == npwr)
+	if (recalcListContains(nn))
 		return;
-	if (arrayContains(recalclist, recalccount, nn))
-		return;
-	recalclist[recalccount] = nn;
-	recalccount++;
+	recalc.list[recalc.count] = nn;
+	recalc.count++;
+	recalc.bitmap[nn] = 1;
 }
 
 void
@@ -255,8 +275,8 @@ void
 recalcTransistor(int tn)
 {
 #ifdef DEBUG
-	printf("%s tn=%d, recalclist=", __func__, tn);
-	printarray(recalclist, recalccount);
+	printf("%s tn=%d, recalc.list=", __func__, tn);
+	printarray(recalc.list, recalc.count);
 #endif
 	transistor_t *t = &transistors[tn];
 	BOOL on = isNodeHigh(t->gate);
@@ -275,8 +295,8 @@ void
 recalcNode(int node)
 {
 #ifdef DEBUG
-	printf("%s node=%d, recalclist=", __func__, node);
-	printarray(recalclist, recalccount);
+	printf("%s node=%d, recalc.list=", __func__, node);
+	printarray(recalc.list, recalc.count);
 #endif
 	if (node == ngnd)
 		return;
@@ -319,22 +339,33 @@ recalcNodeList(int *list, int count)
 	printf("%s list=", __func__);
 	printarray(list, count);
 #endif
-	int list1[2000];
-	recalclist = list1;
-	recalccount = 0;
+	int list1[NODES];
+	int bitmap1[NODES];
+	int bitmap2[NODES];
+
+	list_t current;
+	current.list = list;
+	current.count = count;
+	current.bitmap = bitmap2;
+
+	recalc.list = list1;
+	recalc.bitmap = bitmap1;
+
 	int i, j;
 	for (j = 0; j < 100; j++) {	// loop limiter
-		if (!count)
+		clearRecalc();
+
+		if (!current.count)
 			return;
 #ifdef DEBUG
-		printf("%s iteration=%d, list=", __func__, j);
-		printarray(list, count);
+		printf("%s iteration=%d, current.list=", __func__, j);
+		printarray(current.list, current.count);
 #endif
-		for (i = 0; i < count; i++)
-			recalcNode(list[i]);
-		SWAP(list, recalclist);
-		count = recalccount;
-		recalccount = 0;
+		for (i = 0; i < current.count; i++)
+			recalcNode(current.list[i]);
+
+		SWAPLIST(current, recalc);
+
 	}
 }
 
