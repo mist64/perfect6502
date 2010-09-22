@@ -10,6 +10,9 @@ typedef unsigned short uint16_t;
 typedef int BOOL;
 
 typedef uint16_t nodenum_t;
+typedef uint16_t transnum_t;
+typedef uint16_t count_t;
+typedef uint8_t state_t;
 
 #define NO 0
 #define YES 1
@@ -45,11 +48,11 @@ enum {
 typedef struct {
 	BOOL pullup;
 	BOOL pulldown;
-	int state;
+	state_t state;
 	nodenum_t gates[NODES];
 	nodenum_t c1c2s[2*NODES];
-	int gatecount;
-	int c1c2count;
+	count_t gatecount;
+	count_t c1c2count;
 } node_t;
 
 node_t nodes[NODES];
@@ -57,7 +60,7 @@ node_t nodes[NODES];
 #define EMPTY -1
 
 typedef struct {
-	int name;
+	transnum_t name;
 	BOOL on;
 	nodenum_t gate;
 	nodenum_t c1;
@@ -76,7 +79,7 @@ BOOL N, Z, C;
 void
 setupNodes()
 {
-	int i;
+	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
 		nodes[i].pullup = segdefs[i];
 		nodes[i].state = STATE_FL;
@@ -88,7 +91,7 @@ setupNodes()
 void
 setupTransistors()
 {
-	int i;
+	count_t i;
 	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
@@ -113,9 +116,9 @@ setupTransistors()
 
 #ifdef DEBUG
 void
-printarray(nodenum_t *array, int count)
+printarray(nodenum_t *array, count_t count)
 {
-	int i;
+	count_t i;
 	for (i = 0; i < count; i++)
 		printf("%d ", array[i]);
 	printf("\n");
@@ -123,14 +126,14 @@ printarray(nodenum_t *array, int count)
 #endif
 
 nodenum_t group[NODES];
-int groupcount;
+count_t groupcount;
 int groupbitmap[NODES/sizeof(int)];
 
 BOOL
 arrayContains(nodenum_t el)
 {
 #if 0
-	int i;
+	count_t i;
 	for (i = 0; i < groupcount; i++) {
 		if (group[i] == el) {
 			return YES;
@@ -144,7 +147,7 @@ arrayContains(nodenum_t el)
 
 typedef struct {
 	nodenum_t *list;
-	int count;
+	count_t count;
 	char *bitmap;
 } list_t;
 
@@ -166,7 +169,7 @@ recalcListContains(nodenum_t el)
 void addNodeToGroup(nodenum_t i);
 
 void
-addNodeTransistor(nodenum_t node, int t)
+addNodeTransistor(nodenum_t node, transnum_t t)
 {
 #ifdef DEBUG
 	printf("%s n=%d, t=%d, group=", __func__, node, t);
@@ -197,12 +200,12 @@ addNodeToGroup(nodenum_t i)
 		return;
 	if (i == npwr)
 		return;
-	int t;
+	count_t t;
 	for (t = 0; t < nodes[i].c1c2count; t++)
 		addNodeTransistor(i, nodes[i].c1c2s[t]);
 }
 
-int
+state_t
 getNodeValue()
 {
 #ifdef DEBUG
@@ -213,8 +216,8 @@ getNodeValue()
 		return STATE_GND;
 	if (arrayContains(npwr))
 		return STATE_VCC;
-	int flstate = STATE_UNDEFINED;
-	int i;
+	state_t flstate = STATE_UNDEFINED;
+	count_t i;
 	for (i = 0; i < groupcount; i++) {
 		nodenum_t nn = group[i];
 		node_t n = nodes[nn];
@@ -253,7 +256,7 @@ floatnode(nodenum_t nn)
 #endif
 	if (nn == ngnd || nn == npwr)
 		return;
-	int state = nodes[nn].state;
+	state_t state = nodes[nn].state;
 	if (state == STATE_GND || state == STATE_PD)
 		nodes[nn].state = STATE_FL;
 	if (state == STATE_VCC || state == STATE_PU)
@@ -274,7 +277,7 @@ isNodeHigh(nodenum_t nn)
 }
 
 void
-recalcTransistor(int tn)
+recalcTransistor(transnum_t tn)
 {
 #ifdef DEBUG
 	printf("%s tn=%d, recalc.list=", __func__, tn);
@@ -307,19 +310,19 @@ recalcNode(nodenum_t node)
 	bzero(groupbitmap, sizeof(groupbitmap));
 	addNodeToGroup(node);
 
-	int newv = getNodeValue();
-	int i;
+	state_t newv = getNodeValue();
+	count_t i;
 	for (i = 0; i < groupcount; i++) {
 		node_t n = nodes[group[i]];
 		nodes[group[i]].state = newv;
-		int t;
+		count_t t;
 		for (t = 0; t < n.gatecount; t++)
 			recalcTransistor(n.gates[t]);
 	}
 }
 
 void
-recalcNodeList(nodenum_t *list, int count)
+recalcNodeList(nodenum_t *list, count_t count)
 {
 #ifdef DEBUG
 	printf("%s list=", __func__);
@@ -337,7 +340,8 @@ recalcNodeList(nodenum_t *list, int count)
 	recalc.list = list1;
 	recalc.bitmap = bitmap1;
 
-	int i, j;
+	count_t i;
+	int j;
 	for (j = 0; j < 100; j++) {	// loop limiter
 		clearRecalc();
 
@@ -363,7 +367,7 @@ recalcAllNodes()
 #endif
 	printf("%s count=%d\n", __func__, NODES);
 	nodenum_t list[NODES];
-	int i;
+	count_t i;
 	for (i = 0; i < NODES; i++)
 		list[i] = i;
 	recalcNodeList(list, NODES);
@@ -408,7 +412,7 @@ void
 writeDataBus(uint8_t x)
 {
 	nodenum_t recalcs[NODES];
-	int recalcscount = 0;
+	count_t recalcscount = 0;
 	int i;
 	for (i = 0; i < 8; i++) {
 		nodenum_t nn;
@@ -800,7 +804,7 @@ initChip()
 		nodes[nn].state = STATE_FL;
 	nodes[ngnd].state = STATE_GND;
 	nodes[npwr].state = STATE_VCC;
-	int tn;
+	transnum_t tn;
 	for (tn = 0; tn < TRANSISTORS; tn++) 
 		transistors[tn].on = NO;
 	setLow(res);
