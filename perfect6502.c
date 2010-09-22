@@ -26,14 +26,16 @@ uint8_t code[] = { 0xa9, 0x00, 0x20, 0x10, 0x00, 0x4c, 0x02, 0x00,
                    0xe8, 0x88, 0xe6, 0x40, 0x38, 0x69, 0x02, 0x60 };
 
 enum {
-	STATE_UNDEFINED,
-	STATE_GND,
 	STATE_VCC,
-	STATE_FL,
+	STATE_PU,
 	STATE_FH,
+	STATE_GND,
+	STATE_FL,
 	STATE_PD,
-	STATE_PU
+	STATE_UNDEFINED,
 };
+
+#define MAX_HIGH STATE_FH /* VCC, PU and FH are considered high */ 
 
 #define NODES 1725
 #define TRANSISTORS 3510
@@ -224,18 +226,12 @@ floatnode(int nn)
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
-	if (nn == ngnd)
+	if (nn == ngnd || nn == npwr)
 		return;
-	if (nn == npwr)
-		return;
-	node_t n = nodes[nn];
-	if (n.state == STATE_GND)
+	int state = nodes[nn].state;
+	if (state == STATE_GND || state == STATE_PD)
 		nodes[nn].state = STATE_FL;
-	if (n.state == STATE_PD)
-		nodes[nn].state = STATE_FL;
-	if (n.state == STATE_VCC)
-		nodes[nn].state = STATE_FH;
-	if (n.state == STATE_PU)
+	if (state == STATE_VCC || state == STATE_PU)
 		nodes[nn].state = STATE_FH;
 #ifdef DEBUG
 	printf("%s %i to state %d\n", __func__, nn, n.state);
@@ -247,14 +243,9 @@ isNodeHigh(int nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d state=%d\n", __func__, nn, nodes[nn].state);
-	printf("%s nn=%d res=%d\n", __func__, nn, (nodes[nn].state == STATE_VCC) ||
-            (nodes[nn].state == STATE_PU) ||
-            (nodes[nn].state == STATE_FH));
+	printf("%s nn=%d res=%d\n", __func__, nn, nodes[nn].state <= MAX_HIGH);
 #endif
-//printf("%s nn=%d res=%d\n", __func__, nn, nodes[nn].state);
-	return ((nodes[nn].state == STATE_VCC) ||
-            (nodes[nn].state == STATE_PU) ||
-            (nodes[nn].state == STATE_FH));
+	return nodes[nn].state <= MAX_HIGH;
 }
 
 void
