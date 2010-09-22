@@ -203,21 +203,24 @@ getNodeValue(int *group, int groupcount)
 	return flstate;
 }
 
+int *recalclist;
+int recalccount;
+
 void
-addRecalcNode(int nn, int *recalclist, int *recalccount)
+addRecalcNode(int nn)
 {
 #ifdef DEBUG
 	printf("%s nn=%d recalclist=", __func__, nn);
-	printarray(recalclist, *recalccount);
+	printarray(recalclist, recalccount);
 #endif
 	if (nn == ngnd)
 		return;
 	if (nn == npwr)
 		return;
-	if (arrayContains(recalclist, *recalccount, nn))
+	if (arrayContains(recalclist, recalccount, nn))
 		return;
-	recalclist[*recalccount] = nn;
-	(*recalccount)++;
+	recalclist[recalccount] = nn;
+	recalccount++;
 }
 
 void
@@ -249,11 +252,11 @@ isNodeHigh(int nn)
 }
 
 void
-recalcTransistor(int tn, int *recalclist, int *recalccount)
+recalcTransistor(int tn)
 {
 #ifdef DEBUG
 	printf("%s tn=%d, recalclist=", __func__, tn);
-	printarray(recalclist, *recalccount);
+	printarray(recalclist, recalccount);
 #endif
 	transistor_t *t = &transistors[tn];
 	BOOL on = isNodeHigh(t->gate);
@@ -264,16 +267,16 @@ recalcTransistor(int tn, int *recalclist, int *recalccount)
 		floatnode(t->c1);
 		floatnode(t->c2);
 	}
-	addRecalcNode(t->c1, recalclist, recalccount);
-	addRecalcNode(t->c2, recalclist, recalccount);
+	addRecalcNode(t->c1);
+	addRecalcNode(t->c2);
 }
 
 void
-recalcNode(int node, int *recalclist, int *recalccount)
+recalcNode(int node)
 {
 #ifdef DEBUG
 	printf("%s node=%d, recalclist=", __func__, node);
-	printarray(recalclist, *recalccount);
+	printarray(recalclist, recalccount);
 #endif
 	if (node == ngnd)
 		return;
@@ -305,7 +308,7 @@ recalcNode(int node, int *recalclist, int *recalccount)
 #endif
 //printf("there are %d gates\n", n.gatecount);
 		for (t = 0; t < n.gatecount; t++)
-			recalcTransistor(n.gates[t], recalclist, recalccount);
+			recalcTransistor(n.gates[t]);
 	}
 }
 
@@ -317,8 +320,8 @@ recalcNodeList(int *list, int count)
 	printarray(list, count);
 #endif
 	int list1[2000];
-	int *recalclist = list1;
-	int recalccount = 0;
+	recalclist = list1;
+	recalccount = 0;
 	int i, j;
 	for (j = 0; j < 100; j++) {	// loop limiter
 		if (!count)
@@ -328,7 +331,7 @@ recalcNodeList(int *list, int count)
 		printarray(list, count);
 #endif
 		for (i = 0; i < count; i++)
-			recalcNode(list[i], recalclist, &recalccount);
+			recalcNode(list[i]);
 		SWAP(list, recalclist);
 		count = recalccount;
 		recalccount = 0;
