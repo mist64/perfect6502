@@ -61,13 +61,28 @@ node_t nodes[NODES];
 
 typedef struct {
 	transnum_t name;
-	BOOL on;
 	nodenum_t gate;
 	nodenum_t c1;
 	nodenum_t c2;
 } transistor_t;
 
 transistor_t transistors[TRANSISTORS];
+int transistors_on[TRANSISTORS/sizeof(int)];
+
+void
+set_transistors_on(transnum_t t, BOOL state)
+{
+	if (state)
+		transistors_on[t>>5] |= 1 << (t & 31);
+	else
+		transistors_on[t>>5] &= ~(1 << (t & 31));
+}
+
+BOOL
+get_transistors_on(transnum_t t)
+{
+	return (transistors_on[t>>5] >> (t & 31)) & 1;
+}
 
 uint8_t memory[65536];
 int cycle;
@@ -97,20 +112,12 @@ setupTransistors()
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
 		transistors[i].name = i;
-		transistors[i].on = NO;
 		transistors[i].gate = gate;
 		transistors[i].c1 = c1;
 		transistors[i].c2 = c2;
-//		printf("1 gate=%d, gatecount=%d\n", gate, nodes[gate].gatecount);
 		nodes[gate].gates[nodes[gate].gatecount++] = i;
-//		printf("2 gate=%d, gatecount=%d\n", gate, nodes[gate].gatecount);
-		if (nodes[gate].gatecount > NODES)
-			printf("0BIG\n");
 		nodes[c1].c1c2s[nodes[c1].c1c2count++] = i;
 		nodes[c2].c1c2s[nodes[c2].c1c2count++] = i;
-//		printf("3 gate=%d, c1c2count=%d\n", gate, nodes[gate].c1c2count);
-		if (nodes[gate].c1c2count > 2*NODES)
-			printf("1BIG\n");
 	}
 }
 
@@ -175,7 +182,7 @@ addNodeTransistor(nodenum_t node, transnum_t t)
 	printf("%s n=%d, t=%d, group=", __func__, node, t);
 	printarray(group, groupcount);
 #endif
-	if (!transistors[t].on)
+	if (!get_transistors_on(t))
 		return;
 	nodenum_t other;
 	if (transistors[t].c1 == node)
@@ -285,9 +292,9 @@ recalcTransistor(transnum_t tn)
 #endif
 	transistor_t *t = &transistors[tn];
 	BOOL on = isNodeHigh(t->gate);
-	if (on == t->on)
+	if (on == get_transistors_on(tn))
 		return;
-	t->on = on;
+	set_transistors_on(tn, on);
 	if (!on) {
 		floatnode(t->c1);
 		floatnode(t->c2);
@@ -806,7 +813,7 @@ initChip()
 	nodes[npwr].state = STATE_VCC;
 	transnum_t tn;
 	for (tn = 0; tn < TRANSISTORS; tn++) 
-		transistors[tn].on = NO;
+		set_transistors_on(tn, NO);
 	setLow(res);
 	setLow(clk0);
 	setHigh(rdy);
@@ -824,7 +831,7 @@ initChip()
 
 	string = '';
 	for (var i in transistors) {
-		string += ' '+transistors[i].on;
+		string += ' '+transistors_on[i];
 	}
 	console.log(string);
 #endif
