@@ -63,7 +63,6 @@ int transistors_on[TRANSISTORS/sizeof(int)+1];
 void
 set_transistors_on(transnum_t t, BOOL state)
 {
-//	/*DEBUG*/if (t>>5 > sizeof(transistors_on)) printf
 	if (state)
 		transistors_on[t>>5] |= 1 << (t & 31);
 	else
@@ -88,7 +87,6 @@ setupNodesAndTransistors()
 {
 	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
-//printf("%d %d\n", __LINE__, i);
 		nodes_pullup[i] = segdefs[i];
 		nodes_state[i] = STATE_FL;
 		nodes_gatecount[i] = 0;
@@ -218,7 +216,6 @@ getNodeValue()
 	count_t i;
 	for (i = 0; i < groupcount; i++) {
 		nodenum_t nn = group[i];
-//printf("%d %d\n", __LINE__, nn);
 		if (nodes_pullup[nn])
 			return STATE_PU;
 		if (nodes_pulldown[nn])
@@ -375,7 +372,6 @@ setLow(nodenum_t nn)
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
-//printf("%d %d\n", __LINE__, nn);
 	nodes_pullup[nn] = NO;
 	nodes_pulldown[nn] = YES;
 	nodenum_t list[NODES];
@@ -389,7 +385,6 @@ setHigh(nodenum_t nn)
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
-//printf("%d %d\n", __LINE__, nn);
 	nodes_pullup[nn] = YES;
 	nodes_pulldown[nn] = NO;
 	nodenum_t list[NODES];
@@ -426,11 +421,9 @@ writeDataBus(uint8_t x)
 		}
 		if ((x & 1) == 0) {
 			nodes_pulldown[nn] = YES;
-//printf("%d %d\n", __LINE__, nn);
 			nodes_pullup[nn] = NO;
 		} else {
 			nodes_pulldown[nn] = NO;
-//printf("%d %d\n", __LINE__, nn);
 			nodes_pullup[nn] = YES;
 		}
 		recalcs[recalcscount++] = nn;
