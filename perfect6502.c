@@ -262,14 +262,23 @@ recalcNode(nodenum_t node)
 
 	groupcount = 0;
 	bzero(groupbitmap, sizeof(groupbitmap));
+	/*
+	 * get all nodes that are connected through
+	 * transistors, starting with this one
+	 */
 	addNodeToGroup(node);
 
+	/* get the state of the group */
 	state_t newv = getNodeValue();
 
+	/*
+	 * now all nodes in this group are in this state,
+	 * and all transistors in the group need to be
+	 * recalculated
+	 */
 	for (count_t i = 0; i < groupcount; i++) {
 		nodes_state[group[i]] = newv;
-		count_t t;
-		for (t = 0; t < nodes_gatecount[group[i]]; t++)
+		for (count_t t = 0; t < nodes_gatecount[group[i]]; t++)
 			recalcTransistor(nodes_gates[group[i]][t]);
 	}
 }
