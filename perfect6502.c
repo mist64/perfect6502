@@ -81,7 +81,6 @@ setupNodesAndTransistors()
 	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
 		nodes_pullup[i] = segdefs[i];
-		nodes_state[i] = STATE_FL;
 		nodes_gatecount[i] = 0;
 		nodes_c1c2count[i] = 0;
 	}
@@ -97,6 +96,8 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
+	nodes_state[ngnd] = STATE_GND;
+	nodes_state[npwr] = STATE_VCC;
 }
 
 #ifdef DEBUG
@@ -579,26 +580,6 @@ chipStatus()
 
 /************************************************************
  *
- * Main CLock Loop
- *
- ************************************************************/
-
-void
-halfStep()
-{
-	BOOL clk = isNodeHigh(clk0);
-
-	setNode(clk0, !clk);
-
-	if (clk && isNodeHigh(rw))
-		writeDataBus(mRead(readAddressBus()));
-
-	if (!clk && !isNodeHigh(rw))
-		mWrite(readAddressBus(), readDataBus());
-}
-
-/************************************************************
- *
  * Interface to OS Library Code / Monitor
  *
  ************************************************************/
@@ -610,12 +591,24 @@ init_monitor()
 	f = fopen("cbmbasic.bin", "r");
 	fread(memory + 0xA000, 1, 17591, f);
 	fclose(f);
+
+	/*
+	 * fill the KERNAL jumptable with JMP $F800;
+	 * we will put code there later that loads
+	 * the CPU state and returns
+	 */
 	for (uint16_t addr = 0xFF90; addr < 0xFFF3; addr += 3) {
 		memory[addr+0] = 0x4C;
 		memory[addr+1] = 0x00;
 		memory[addr+2] = 0xF8;
 	}
 
+	/*
+	 * cbmbasic scribbles over 0x01FE/0x1FF, so we can't start
+	 * with a stackpointer of 0 (which seems to be the state
+	 * after a RESET), so RESET jumps to 0xF000, which contains
+	 * a JSR to the actual start of cbmbasic
+	 */
 	memory[0xf000] = 0x20;
 	memory[0xf001] = 0x94;
 	memory[0xf002] = 0xE3;
@@ -628,7 +621,9 @@ void
 handle_monitor()
 {
 	PC = readPC();
+
 	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0) && isNodeHigh(clk0)) {
+		/* get register status out of 6502 */
 		A = readA();
 		X = readX();
 		Y = readY();
@@ -640,64 +635,54 @@ handle_monitor()
 
 		kernal_dispatch();
 
+		/* encode processor status */
 		P &= 0x7C; // clear N, Z, C
 		P |= (N << 7) | (Z << 1) | C;
 
 		/*
-		LDA #P
-		PHA
-		LDA #A
-		LDX #X
-		LDY #Y
-		PLP
-		RTS
-		//XXX we could do RTI instead, but RTI is broken!
-		*/
-		memory[0xf800] = 0xA9;
+		 * all KERNAL calls make the 6502 jump to $F800, so we
+		 * put code there that loads the return state of the
+		 * KERNAL function and returns to the caller
+		 */
+		memory[0xf800] = 0xA9; /* LDA #P */
 		memory[0xf801] = P;
-		memory[0xf802] = 0x48;
-		memory[0xf803] = 0xA9;
+		memory[0xf802] = 0x48; /* PHA    */
+		memory[0xf803] = 0xA9; /* LHA #A */
 		memory[0xf804] = A;
-		memory[0xf805] = 0xA2;
+		memory[0xf805] = 0xA2; /* LDX #X */
 		memory[0xf806] = X;
-		memory[0xf807] = 0xA0;
+		memory[0xf807] = 0xA0; /* LDY #Y */
 		memory[0xf808] = Y;
-		memory[0xf809] = 0x28;
-		memory[0xf80a] = 0x60;
-
+		memory[0xf809] = 0x28; /* PLP    */
+		memory[0xf80a] = 0x60; /* RTS    */
+		/*
+		 * XXX we could do RTI instead of PLP/RTS, but RTI seems to be
+		 * XXX broken in the chip dump - after the KERNAL call at 0xFF90,
+		 * XXX the 6502 gets heavily confused about its program counter
+		 * XXX and executes garbage instructions
+		 */
 	}
 }
 
 /************************************************************
  *
- * Initialization
+ * Main Clock Loop
  *
  ************************************************************/
 
 void
-initChip()
+halfStep()
 {
-	for (nodenum_t nn = 0; nn < NODES; nn++)
-		nodes_state[nn] = STATE_FL;
-	nodes_state[ngnd] = STATE_GND;
-	nodes_state[npwr] = STATE_VCC;
-	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
-		set_transistors_on(tn, NO);
-	setLow(res);
-	setLow(clk0);
-	setHigh(rdy);
-	setLow(so);
-	setHigh(irq);
-	setHigh(nmi);
-	recalcAllNodes(); 
+	BOOL clk = isNodeHigh(clk0);
 
-	/* hold RESET for 8 cycles to finish executing instruction */
-	for (int i = 0; i < 16; i++)
-		setNode(clk0, !(i & 1));
+	/* invert clock */
+	setNode(clk0, !clk);
 
-	setHigh(res);
-
-	cycle = 0;
+	/* handle memory reads and writes */
+	if (clk && isNodeHigh(rw))
+		writeDataBus(mRead(readAddressBus()));
+	if (!clk && !isNodeHigh(rw))
+		mWrite(readAddressBus(), readDataBus());
 }
 
 void
@@ -711,29 +696,52 @@ step()
 	handle_monitor();
 }
 
+/************************************************************
+ *
+ * Initialization
+ *
+ ************************************************************/
+
 void
-steps()
+initChip()
 {
-#ifdef DEBUG
-	printf("%s\n", __func__);
-#endif
-	for (;;)
+	/* all nodes are floating */
+	for (nodenum_t nn = 0; nn < NODES; nn++)
+		nodes_state[nn] = STATE_FL;
+	/* all transistors are off */
+	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
+		set_transistors_on(tn, NO);
+
+	cycle = 0;
+
+	setLow(res);
+	setLow(clk0);
+	setHigh(rdy);
+	setLow(so);
+	setHigh(irq);
+	setHigh(nmi);
+
+	recalcAllNodes(); 
+
+	/* hold RESET for 8 cycles */
+	for (int i = 0; i < 16; i++)
 		step();
-}
 
-void
-setup()
-{
-	setupNodesAndTransistors();
-	initChip();
-	init_monitor();
-
-	steps();
+	/* release RESET */
+	setHigh(res);
 }
 
 int
 main()
 {
-	setup();
-	return 0;
+	/* set up data structures for efficient emulation */
+	setupNodesAndTransistors();
+	/* set initial state of nodes, transistors, inputs; RESET chip */
+	initChip();
+	/* set up memory for user program */
+	init_monitor();
+
+	/* emulate the 6502! */
+	for (;;)
+		step();
 }
