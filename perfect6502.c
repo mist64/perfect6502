@@ -45,33 +45,25 @@ enum {
 #define NODES 1725
 #define TRANSISTORS 3510
 
-typedef struct {
-	BOOL pullup;
-	BOOL pulldown;
-	state_t state;
-	nodenum_t gates[NODES];
-	nodenum_t c1c2s[2*NODES];
-	count_t gatecount;
-	count_t c1c2count;
-} node_t;
+BOOL nodes_pullup[NODES];//XXX no idea why this array overflows!!
+BOOL nodes_pulldown[NODES];
+state_t nodes_state[NODES];
+nodenum_t nodes_gates[NODES][NODES];
+nodenum_t nodes_c1c2s[NODES][2*NODES];
+count_t nodes_gatecount[NODES];
+count_t nodes_c1c2count[NODES];
 
-node_t nodes[NODES];
+transnum_t transistors_name[TRANSISTORS];
+nodenum_t transistors_gate[TRANSISTORS];
+nodenum_t transistors_c1[TRANSISTORS];
+nodenum_t transistors_c2[TRANSISTORS];
 
-#define EMPTY -1
-
-typedef struct {
-	transnum_t name;
-	nodenum_t gate;
-	nodenum_t c1;
-	nodenum_t c2;
-} transistor_t;
-
-transistor_t transistors[TRANSISTORS];
-int transistors_on[TRANSISTORS/sizeof(int)];
+int transistors_on[TRANSISTORS/sizeof(int)+1];
 
 void
 set_transistors_on(transnum_t t, BOOL state)
 {
+//	/*DEBUG*/if (t>>5 > sizeof(transistors_on)) printf
 	if (state)
 		transistors_on[t>>5] |= 1 << (t & 31);
 	else
@@ -92,32 +84,27 @@ uint16_t PC;
 BOOL N, Z, C;
 
 void
-setupNodes()
+setupNodesAndTransistors()
 {
 	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
-		nodes[i].pullup = segdefs[i];
-		nodes[i].state = STATE_FL;
-		nodes[i].gatecount = 0;
-		nodes[i].c1c2count = 0;
+//printf("%d %d\n", __LINE__, i);
+		nodes_pullup[i] = segdefs[i];
+		nodes_state[i] = STATE_FL;
+		nodes_gatecount[i] = 0;
+		nodes_c1c2count[i] = 0;
 	}
-}
-
-void
-setupTransistors()
-{
-	count_t i;
 	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
-		transistors[i].name = i;
-		transistors[i].gate = gate;
-		transistors[i].c1 = c1;
-		transistors[i].c2 = c2;
-		nodes[gate].gates[nodes[gate].gatecount++] = i;
-		nodes[c1].c1c2s[nodes[c1].c1c2count++] = i;
-		nodes[c2].c1c2s[nodes[c2].c1c2count++] = i;
+		transistors_name[i] = i;
+		transistors_gate[i] = gate;
+		transistors_c1[i] = c1;
+		transistors_c2[i] = c2;
+		nodes_gates[gate][nodes_gatecount[gate]++] = i;
+		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
+		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
 }
 
@@ -134,7 +121,7 @@ printarray(nodenum_t *array, count_t count)
 
 nodenum_t group[NODES];
 count_t groupcount;
-int groupbitmap[NODES/sizeof(int)];
+int groupbitmap[NODES/sizeof(int)+1];
 
 BOOL
 arrayContains(nodenum_t el)
@@ -185,10 +172,14 @@ addNodeTransistor(nodenum_t node, transnum_t t)
 	if (!get_transistors_on(t))
 		return;
 	nodenum_t other;
-	if (transistors[t].c1 == node)
-		other = transistors[t].c2;
-	if (transistors[t].c2 == node)
-		other = transistors[t].c1;
+	if ((transistors_c1[t] != node) && (transistors_c2[t] != node)) {
+		return;
+	}
+
+	if (transistors_c1[t] == node)
+		other = transistors_c2[t];
+	if (transistors_c2[t] == node)
+		other = transistors_c1[t];
 	addNodeToGroup(other);
 }
 
@@ -208,8 +199,8 @@ addNodeToGroup(nodenum_t i)
 	if (i == npwr)
 		return;
 	count_t t;
-	for (t = 0; t < nodes[i].c1c2count; t++)
-		addNodeTransistor(i, nodes[i].c1c2s[t]);
+	for (t = 0; t < nodes_c1c2count[i]; t++)
+		addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
 state_t
@@ -227,14 +218,14 @@ getNodeValue()
 	count_t i;
 	for (i = 0; i < groupcount; i++) {
 		nodenum_t nn = group[i];
-		node_t n = nodes[nn];
-		if (n.pullup)
+//printf("%d %d\n", __LINE__, nn);
+		if (nodes_pullup[nn])
 			return STATE_PU;
-		if (n.pulldown)
+		if (nodes_pulldown[nn])
 			return STATE_PD;
-		if ((n.state == STATE_FL) && (flstate == STATE_UNDEFINED))
+		if ((nodes_state[nn] == STATE_FL) && (flstate == STATE_UNDEFINED))
 			flstate = STATE_FL;
-		if (n.state== STATE_FH)
+		if (nodes_state[nn] == STATE_FH)
 			flstate = STATE_FH;
 	}
 	return flstate;
@@ -263,11 +254,11 @@ floatnode(nodenum_t nn)
 #endif
 	if (nn == ngnd || nn == npwr)
 		return;
-	state_t state = nodes[nn].state;
+	state_t state = nodes_state[nn];
 	if (state == STATE_GND || state == STATE_PD)
-		nodes[nn].state = STATE_FL;
+		nodes_state[nn] = STATE_FL;
 	if (state == STATE_VCC || state == STATE_PU)
-		nodes[nn].state = STATE_FH;
+		nodes_state[nn] = STATE_FH;
 #ifdef DEBUG
 	printf("%s %i to state %d\n", __func__, nn, n.state);
 #endif
@@ -280,7 +271,7 @@ isNodeHigh(nodenum_t nn)
 	printf("%s nn=%d state=%d\n", __func__, nn, nodes[nn].state);
 	printf("%s nn=%d res=%d\n", __func__, nn, nodes[nn].state <= MAX_HIGH);
 #endif
-	return nodes[nn].state <= MAX_HIGH;
+	return nodes_state[nn] <= MAX_HIGH;
 }
 
 void
@@ -290,17 +281,16 @@ recalcTransistor(transnum_t tn)
 	printf("%s tn=%d, recalc.list=", __func__, tn);
 	printarray(recalc.list, recalc.count);
 #endif
-	transistor_t *t = &transistors[tn];
-	BOOL on = isNodeHigh(t->gate);
+	BOOL on = isNodeHigh(transistors_gate[tn]);
 	if (on == get_transistors_on(tn))
 		return;
 	set_transistors_on(tn, on);
 	if (!on) {
-		floatnode(t->c1);
-		floatnode(t->c2);
+		floatnode(transistors_c1[tn]);
+		floatnode(transistors_c2[tn]);
 	}
-	addRecalcNode(t->c1);
-	addRecalcNode(t->c2);
+	addRecalcNode(transistors_c1[tn]);
+	addRecalcNode(transistors_c2[tn]);
 }
 
 void
@@ -320,11 +310,10 @@ recalcNode(nodenum_t node)
 	state_t newv = getNodeValue();
 	count_t i;
 	for (i = 0; i < groupcount; i++) {
-		node_t n = nodes[group[i]];
-		nodes[group[i]].state = newv;
+		nodes_state[group[i]] = newv;
 		count_t t;
-		for (t = 0; t < n.gatecount; t++)
-			recalcTransistor(n.gates[t]);
+		for (t = 0; t < nodes_gatecount[group[i]]; t++)
+			recalcTransistor(nodes_gates[group[i]][t]);
 	}
 }
 
@@ -386,8 +375,9 @@ setLow(nodenum_t nn)
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
-	nodes[nn].pullup = NO;
-	nodes[nn].pulldown = YES;
+//printf("%d %d\n", __LINE__, nn);
+	nodes_pullup[nn] = NO;
+	nodes_pulldown[nn] = YES;
 	nodenum_t list[NODES];
 	list[0] = nn;
 	recalcNodeList(list, 1);
@@ -399,8 +389,9 @@ setHigh(nodenum_t nn)
 #ifdef DEBUG
 	printf("%s nn=%d\n", __func__, nn);
 #endif
-	nodes[nn].pullup = YES;
-	nodes[nn].pulldown = NO;
+//printf("%d %d\n", __LINE__, nn);
+	nodes_pullup[nn] = YES;
+	nodes_pulldown[nn] = NO;
 	nodenum_t list[NODES];
 	list[0] = nn;
 	recalcNodeList(list, 1);
@@ -434,11 +425,13 @@ writeDataBus(uint8_t x)
 		case 7: nn = db7; break;
 		}
 		if ((x & 1) == 0) {
-			nodes[nn].pulldown = YES;
-			nodes[nn].pullup = NO;
+			nodes_pulldown[nn] = YES;
+//printf("%d %d\n", __LINE__, nn);
+			nodes_pullup[nn] = NO;
 		} else {
-			nodes[nn].pulldown = NO;
-			nodes[nn].pullup = YES;
+			nodes_pulldown[nn] = NO;
+//printf("%d %d\n", __LINE__, nn);
+			nodes_pullup[nn] = YES;
 		}
 		recalcs[recalcscount++] = nn;
 		x >>= 1;
@@ -808,9 +801,9 @@ initChip()
 #endif
 	nodenum_t nn;
 	for (nn = 0; nn < NODES; nn++)
-		nodes[nn].state = STATE_FL;
-	nodes[ngnd].state = STATE_GND;
-	nodes[npwr].state = STATE_VCC;
+		nodes_state[nn] = STATE_FL;
+	nodes_state[ngnd] = STATE_GND;
+	nodes_state[npwr] = STATE_VCC;
 	transnum_t tn;
 	for (tn = 0; tn < TRANSISTORS; tn++) 
 		set_transistors_on(tn, NO);
@@ -964,8 +957,7 @@ go(n)
 void
 setup()
 {
-	setupNodes();
-	setupTransistors();
+	setupNodesAndTransistors();
 	initChip();
 	go();
 }
