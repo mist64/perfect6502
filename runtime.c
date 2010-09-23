@@ -399,7 +399,7 @@ CHRIN() {
 /* CHROUT */
 static void
 CHROUT() {
-exit(1);
+//exit(1);
 #if 0
 int a = *(unsigned short*)(&RAM[0x0100+S+1]) + 1;
 int b = *(unsigned short*)(&RAM[0x0100+S+3]) + 1;

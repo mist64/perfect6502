@@ -599,70 +599,34 @@ halfStep()
 
 /************************************************************
  *
- * Initialization
+ * Interface to OS Library Code / Monitor
  *
  ************************************************************/
 
 void
-initChip()
+init_monitor()
 {
-	nodenum_t nn;
-	for (nn = 0; nn < NODES; nn++)
-		nodes_state[nn] = STATE_FL;
-	nodes_state[ngnd] = STATE_GND;
-	nodes_state[npwr] = STATE_VCC;
-	transnum_t tn;
-	for (tn = 0; tn < TRANSISTORS; tn++) 
-		set_transistors_on(tn, NO);
-	setLow(res);
-	setLow(clk0);
-	setHigh(rdy);
-	setLow(so);
-	setHigh(irq);
-	setHigh(nmi);
-	recalcAllNodes(); 
-
-#if 0
-	var string = '';
-	for (var i in nodes) {
-		string += ' '+nodes[i].pullup;
+	FILE *f;
+	f = fopen("cbmbasic.bin", "r");
+	fread(memory + 0xA000, 1, 17591, f);
+	fclose(f);
+	for (uint16_t addr = 0xFF90; addr < 0xFFF3; addr += 3) {
+		memory[addr+0] = 0x4C;
+		memory[addr+1] = 0x00;
+		memory[addr+2] = 0xF8;
 	}
-	console.log(string);
 
-	string = '';
-	for (var i in transistors) {
-		string += ' '+transistors_on[i];
-	}
-	console.log(string);
-#endif
-
-#if 1
-	int i;
-	for (i = 0; i < 8; i++) {
-		setHigh(clk0);
-		setLow(clk0);
-	}
-#endif
-	setHigh(res);
-#if 0
-	for (i = 0; i < 18; i++)
-		halfStep();
-#endif
-	cycle = 0;
-//	chipStatus();
+	memory[0xf000] = 0x20;
+	memory[0xf001] = 0x94;
+	memory[0xf002] = 0xE3;
+	
+	memory[0xfffc] = 0x00;
+	memory[0xfffd] = 0xF0;
 }
 
 void
-step()
+handle_monitor()
 {
-#ifdef DEBUG
-	printf("%s\n", __func__);
-#endif
-	halfStep();
-	cycle++;
-	if (verbose)
-		chipStatus();
-
 	PC = readPC();
 	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0) && isNodeHigh(clk0)) {
 		A = readA();
@@ -704,6 +668,49 @@ step()
 	}
 }
 
+/************************************************************
+ *
+ * Initialization
+ *
+ ************************************************************/
+
+void
+initChip()
+{
+	for (nodenum_t nn = 0; nn < NODES; nn++)
+		nodes_state[nn] = STATE_FL;
+	nodes_state[ngnd] = STATE_GND;
+	nodes_state[npwr] = STATE_VCC;
+	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
+		set_transistors_on(tn, NO);
+	setLow(res);
+	setLow(clk0);
+	setHigh(rdy);
+	setLow(so);
+	setHigh(irq);
+	setHigh(nmi);
+	recalcAllNodes(); 
+
+	/* hold RESET for 8 cycles to finish executing instruction */
+	for (int i = 0; i < 16; i++)
+		setNode(clk0, !(i & 1));
+
+	setHigh(res);
+
+	cycle = 0;
+}
+
+void
+step()
+{
+	halfStep();
+	cycle++;
+	if (verbose)
+		chipStatus();
+
+	handle_monitor();
+}
+
 void
 steps()
 {
@@ -715,40 +722,13 @@ steps()
 }
 
 void
-go(n)
-{
-#ifdef DEBUG
-	printf("%s\n", __func__);
-#endif
-
-	FILE *f;
-	f = fopen("cbmbasic.bin", "r");
-	fread(memory + 0xA000, 1, 17591, f);
-	fclose(f);
-//	memset(memory + 0xFF90, 0x60, 0x70);
-	int addr;
-	for (addr = 0xFF90; addr < 0xFFF3; addr += 3) {
-		memory[addr+0] = 0x4C;
-		memory[addr+1] = 0x00;
-		memory[addr+2] = 0xF8;
-	}
-
-	memory[0xf000] = 0x20;
-	memory[0xf001] = 0x94;
-	memory[0xf002] = 0xE3;
-	
-	memory[0xfffc] = 0x00;
-	memory[0xfffd] = 0xF0;
-
-	steps();
-}
-
-void
 setup()
 {
 	setupNodesAndTransistors();
 	initChip();
-	go();
+	init_monitor();
+
+	steps();
 }
 
 int
