@@ -24,10 +24,6 @@ typedef uint8_t state_t;
 #define ngnd vss
 #define npwr vcc
 
-uint8_t code[] = { 0xa9, 0x00, 0x20, 0x10, 0x00, 0x4c, 0x02, 0x00, 
-                   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                   0xe8, 0x88, 0xe6, 0x40, 0x38, 0x69, 0x02, 0x60 };
-
 enum {
 	STATE_VCC,
 	STATE_PU,
@@ -144,41 +140,29 @@ void addNodeToGroup(nodenum_t i);
 void
 addNodeTransistor(nodenum_t node, transnum_t t)
 {
-#ifdef DEBUG
-	printf("%s n=%d, t=%d, group=", __func__, node, t);
-	printarray(group, groupcount);
-#endif
+	/* if the transistor does not connect c1 and c2, we stop here */
 	if (!get_transistors_on(t))
 		return;
-	nodenum_t other;
-	if ((transistors_c1[t] != node) && (transistors_c2[t] != node)) {
-		return;
-	}
 
 	if (transistors_c1[t] == node)
-		other = transistors_c2[t];
-	if (transistors_c2[t] == node)
-		other = transistors_c1[t];
-	addNodeToGroup(other);
+		addNodeToGroup(transistors_c2[t]);
+	else
+		addNodeToGroup(transistors_c1[t]);
 }
 
 void
 addNodeToGroup(nodenum_t i)
 {
-#ifdef DEBUG
-	printf("%s %d, group=", __func__, i);
-	printarray(group, groupcount);
-#endif
 	if (groupContains(i))
 		return;
+
 	group[groupcount++] = i;
 	groupbitmap[i>>5] |= 1 << (i & 31);
-	if (i == ngnd)
+
+	if (i == ngnd || i == npwr)
 		return;
-	if (i == npwr)
-		return;
-	count_t t;
-	for (t = 0; t < nodes_c1c2count[i]; t++)
+
+	for (count_t t = 0; t < nodes_c1c2count[i]; t++)
 		addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
@@ -281,8 +265,8 @@ recalcNode(nodenum_t node)
 	addNodeToGroup(node);
 
 	state_t newv = getNodeValue();
-	count_t i;
-	for (i = 0; i < groupcount; i++) {
+
+	for (count_t i = 0; i < groupcount; i++) {
 		nodes_state[group[i]] = newv;
 		count_t t;
 		for (t = 0; t < nodes_gatecount[group[i]]; t++)
@@ -737,34 +721,25 @@ go(n)
 	printf("%s\n", __func__);
 #endif
 
-#if 0
-	memcpy(memory, code, sizeof(code));
-	memory[0xfffc] = 0x00;
-	memory[0xfffd] = 0x00;
-#else
 	FILE *f;
 	f = fopen("cbmbasic.bin", "r");
 	fread(memory + 0xA000, 1, 17591, f);
 	fclose(f);
 //	memset(memory + 0xFF90, 0x60, 0x70);
 	int addr;
-	for (addr = 0xFF90; addr < 0x10000; addr += 3) {
+	for (addr = 0xFF90; addr < 0xFFF3; addr += 3) {
 		memory[addr+0] = 0x4C;
 		memory[addr+1] = 0x00;
 		memory[addr+2] = 0xF8;
 	}
-#if 0
-	memory[0xfffc] = 0x94;
-	memory[0xfffd] = 0xE3;
-#else
+
 	memory[0xf000] = 0x20;
 	memory[0xf001] = 0x94;
 	memory[0xf002] = 0xE3;
 	
 	memory[0xfffc] = 0x00;
 	memory[0xfffd] = 0xF0;
-#endif
-#endif
+
 	steps();
 }
 
