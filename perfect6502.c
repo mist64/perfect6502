@@ -140,7 +140,7 @@ arrayContains(nodenum_t el)
 typedef struct {
 	nodenum_t *list;
 	count_t count;
-	char *bitmap;
+	int *bitmap;
 } list_t;
 
 list_t recalc;
@@ -148,14 +148,14 @@ list_t recalc;
 void
 clearRecalc()
 {
-	bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES);
+	bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
 	recalc.count = 0;
 }
 
 BOOL
 recalcListContains(nodenum_t el)
 {
-	return recalc.bitmap[el];
+	return (recalc.bitmap[el>>5] >> (el & 31)) & 1;
 }
 
 void addNodeToGroup(nodenum_t i);
@@ -240,7 +240,7 @@ addRecalcNode(nodenum_t nn)
 	if (recalcListContains(nn))
 		return;
 	recalc.list[recalc.count++] = nn;
-	recalc.bitmap[nn] = 1;
+	recalc.bitmap[nn>>5] |= 1 << (nn & 31);
 }
 
 void
@@ -322,8 +322,8 @@ recalcNodeList(nodenum_t *list, count_t count)
 	printarray(list, count);
 #endif
 	nodenum_t list1[NODES];
-	char bitmap1[NODES];
-	char bitmap2[NODES];
+	int bitmap1[NODES/sizeof(int)+1];
+	int bitmap2[NODES/sizeof(int)+1];
 
 	list_t current;
 	current.list = list;
@@ -860,8 +860,10 @@ step()
 		Z = (P >> 1) & 1;
 		C = P & 1;
 
-#if 1
 		kernal_dispatch();
+
+		P &= 0x7C; // clear N, Z, C
+		P |= (N << 7) | (Z << 1) | C;
 
 		/*
 		LDA #P
@@ -869,7 +871,9 @@ step()
 		LDA #A
 		LDX #X
 		LDY #Y
-		RTI
+		PLP
+		RTS
+		//XXX we could do RTI instead, but RTI is broken!
 		*/
 		memory[0xf800] = 0xA9;
 		memory[0xf801] = P;
@@ -880,22 +884,9 @@ step()
 		memory[0xf806] = X;
 		memory[0xf807] = 0xA0;
 		memory[0xf808] = Y;
-		memory[0xf809] = 0x40;
+		memory[0xf809] = 0x28;
+		memory[0xf80a] = 0x60;
 
-#if 0
-		PC = memory[0x0100 + S+1] | memory[0x0100 + S + 2] << 8;
-		PC++;
-		S += 2;
-		P &= 0x7C; // clear N, Z, C
-		P |= (N << 7) | (Z << 1) | C;
-		
-		setA(A);
-		setX(X);
-		setY(Y);
-//		setP(P);
-//		recalcAllNodes(); 
-#endif
-#endif
 	}
 }
 

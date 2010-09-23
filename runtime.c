@@ -399,6 +399,7 @@ CHRIN() {
 /* CHROUT */
 static void
 CHROUT() {
+exit(1);
 #if 0
 int a = *(unsigned short*)(&RAM[0x0100+S+1]) + 1;
 int b = *(unsigned short*)(&RAM[0x0100+S+3]) + 1;
@@ -872,8 +873,7 @@ IOBASE() {
 
 int
 kernal_dispatch() {
-{ printf("kernal_dispatch $%04X; ", PC); int i; printf("stack (%02X): ", S); for (i=S+1; i<0x100; i++) { printf("%02X ", RAM[0x0100+i]); } printf("\n"); }
-exit(1);
+//{ printf("kernal_dispatch $%04X; ", PC); int i; printf("stack (%02X): ", S); for (i=S+1; i<0x100; i++) { printf("%02X ", RAM[0x0100+i]); } printf("\n"); }
 	unsigned int new_pc;
 	switch(PC) {
 		case 0x0073:	CHRGET();	break;
