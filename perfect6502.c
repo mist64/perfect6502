@@ -382,32 +382,17 @@ setHigh(nodenum_t nn)
 	setNode(nn, 1);
 }
 
+// the nodes that need to be recalculated on a change of the data bus
+const nodenum_t recalcs[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
+const count_t recalcscount = 8;
+
 void
 writeDataBus(uint8_t x)
 {
-	nodenum_t recalcs[NODES];
-	count_t recalcscount = 0;
-	int i;
-	for (i = 0; i < 8; i++) {
-		nodenum_t nn;
-		switch (i) {
-		case 0: nn = db0; break;
-		case 1: nn = db1; break;
-		case 2: nn = db2; break;
-		case 3: nn = db3; break;
-		case 4: nn = db4; break;
-		case 5: nn = db5; break;
-		case 6: nn = db6; break;
-		case 7: nn = db7; break;
-		}
-		if ((x & 1) == 0) {
-			nodes_pulldown[nn] = YES;
-			nodes_pullup[nn] = NO;
-		} else {
-			nodes_pulldown[nn] = NO;
-			nodes_pullup[nn] = YES;
-		}
-		recalcs[recalcscount++] = nn;
+	for (int i = 0; i < 8; i++) {
+		nodenum_t nn = recalcs[i];
+		nodes_pulldown[nn] = !(x & 1);
+		nodes_pullup[nn] = x & 1;
 		x >>= 1;
 	}
 	recalcNodeList(recalcs, recalcscount);
