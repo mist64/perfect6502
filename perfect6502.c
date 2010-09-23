@@ -182,6 +182,12 @@ addNodeToGroup(nodenum_t i)
 		addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
+// 1. if there is a pullup node, it's STATE_PU
+// 2. if there is a pulldown node, it's STATE_PD
+// (if both 1 and 2 are true, the first pullup or pulldown wins, with
+// a statistical advantage towards STATE_PU
+// 3. otherwise, if there is an FH node, it's STATE_FH
+// 4. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
 state_t
 getNodeValue()
 {
@@ -189,16 +195,13 @@ getNodeValue()
 		return STATE_GND;
 	if (groupContains(npwr))
 		return STATE_VCC;
-	state_t flstate = STATE_UNDEFINED;
-	count_t i;
-	for (i = 0; i < groupcount; i++) {
+	state_t flstate = STATE_FL;
+	for (count_t i = 0; i < groupcount; i++) {
 		nodenum_t nn = group[i];
 		if (nodes_pullup[nn])
 			return STATE_PU;
 		if (nodes_pulldown[nn])
 			return STATE_PD;
-		if ((nodes_state[nn] == STATE_FL) && (flstate == STATE_UNDEFINED))
-			flstate = STATE_FL;
 		if (nodes_state[nn] == STATE_FH)
 			flstate = STATE_FH;
 	}
