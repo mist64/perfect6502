@@ -195,14 +195,15 @@ getNodeValue()
 void
 addRecalcNode(nodenum_t nn)
 {
-#ifdef DEBUG
-	printf("%s nn=%d recalc.list=", __func__, nn);
-	printarray(recalc.list, recalc.count);
-#endif
+	/* no need to analyze VCC or GND */
 	if (nn == ngnd || nn == npwr)
 		return;
+
+	/* we already know about this node */
 	if (recalcListContains(nn))
 		return;
+
+	/* add node to list */
 	recalc.list[recalc.count++] = nn;
 	recalc.bitmap[nn>>5] |= 1 << (nn & 31);
 }
@@ -210,19 +211,17 @@ addRecalcNode(nodenum_t nn)
 void
 floatnode(nodenum_t nn)
 {
-#ifdef DEBUG
-	printf("%s nn=%d\n", __func__, nn);
-#endif
+	/* VCC and GND are constant */
 	if (nn == ngnd || nn == npwr)
 		return;
+
 	state_t state = nodes_state[nn];
+
 	if (state == STATE_GND || state == STATE_PD)
 		nodes_state[nn] = STATE_FL;
+
 	if (state == STATE_VCC || state == STATE_PU)
 		nodes_state[nn] = STATE_FH;
-#ifdef DEBUG
-	printf("%s %i to state %d\n", __func__, nn, n.state);
-#endif
 }
 
 BOOL
@@ -238,18 +237,22 @@ isNodeHigh(nodenum_t nn)
 void
 recalcTransistor(transnum_t tn)
 {
-#ifdef DEBUG
-	printf("%s tn=%d, recalc.list=", __func__, tn);
-	printarray(recalc.list, recalc.count);
-#endif
+	/* if the gate is high, the transistor should be on */
 	BOOL on = isNodeHigh(transistors_gate[tn]);
+
+	/* no change? nothing to do! */
 	if (on == get_transistors_on(tn))
 		return;
+
 	set_transistors_on(tn, on);
+
+	/* if the transistor is off, both nodes are floating */
 	if (!on) {
 		floatnode(transistors_c1[tn]);
 		floatnode(transistors_c2[tn]);
 	}
+
+	/* next time, we'll have to look at both nodes behind the transistor */
 	addRecalcNode(transistors_c1[tn]);
 	addRecalcNode(transistors_c2[tn]);
 }
@@ -273,8 +276,10 @@ recalcNode(nodenum_t node)
 
 	/*
 	 * now all nodes in this group are in this state,
-	 * and all transistors in the group need to be
-	 * recalculated
+	 * - all transistors switched by nodes the group
+	 *   need to be recalculated
+	 * - all nodes behind the transistor are collected
+	 *   and must be looked at in the next run
 	 */
 	for (count_t i = 0; i < groupcount; i++) {
 		nodes_state[group[i]] = newv;
@@ -283,18 +288,25 @@ recalcNode(nodenum_t node)
 	}
 }
 
+/*
+ * NOTE: "list" as provided by the caller must
+ * at least be able to hold NODES elements!
+ */
 void
 recalcNodeList(nodenum_t *list, count_t count)
 {
+	/* storage for secondary list and two sets of bitmaps */
 	nodenum_t list1[NODES];
 	int bitmap1[NODES/sizeof(int)+1];
 	int bitmap2[NODES/sizeof(int)+1];
 
+	/* the nodes we are working with */
 	list_t current;
 	current.list = list;
 	current.count = count;
 	current.bitmap = bitmap2;
 
+	/* the nodes we are collecting for the next run */
 	recalc.list = list1;
 	recalc.bitmap = bitmap1;
 
@@ -302,12 +314,25 @@ recalcNodeList(nodenum_t *list, count_t count)
 		if (!current.count)
 			return;
 
+		/* clear secondary list */
 		bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
 		recalc.count = 0;
 
+		/*
+		 * for all nodes, follow their paths through
+		 * turned-on transistors, find the state of the
+		 * path and assign it to all nodes, and re-evaluate
+		 * all transistors controlled by this path, collecting
+		 * all nodes that changed because of it for the next run
+		 */
 		for (count_t i = 0; i < current.count; i++)
 			recalcNode(current.list[i]);
 
+		/*
+		 * make the secondary list our primary list, use
+		 * the data storage of the primary list as the
+		 * secondary list
+		 */
 		list_t tmp = current;
 		current = recalc;
 		recalc = tmp;
@@ -317,13 +342,8 @@ recalcNodeList(nodenum_t *list, count_t count)
 void
 recalcAllNodes()
 {
-#ifdef DEBUG
-	printf("%s\n", __func__);
-#endif
-	printf("%s count=%d\n", __func__, NODES);
 	nodenum_t list[NODES];
-	count_t i;
-	for (i = 0; i < NODES; i++)
+	for (count_t i = 0; i < NODES; i++)
 		list[i] = i;
 	recalcNodeList(list, NODES);
 }
@@ -350,20 +370,22 @@ setHigh(nodenum_t nn)
 	setNode(nn, 1);
 }
 
-// the nodes that need to be recalculated on a change of the data bus
-const nodenum_t recalcs[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
-const count_t recalcscount = 8;
+/* the nodes that make the data bus */
+const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
 
 void
 writeDataBus(uint8_t x)
 {
 	for (int i = 0; i < 8; i++) {
-		nodenum_t nn = recalcs[i];
+		nodenum_t nn = dbnodes[i];
 		nodes_pulldown[nn] = !(x & 1);
 		nodes_pullup[nn] = x & 1;
 		x >>= 1;
 	}
-	recalcNodeList(recalcs, recalcscount);
+
+	nodenum_t list[NODES];
+	bcopy(dbnodes, list, sizeof(dbnodes));
+	recalcNodeList(list, 8);
 }
 
 uint8_t mRead(uint16_t a)
