@@ -31,7 +31,6 @@ enum {
 	STATE_GND,
 	STATE_FL,
 	STATE_PD,
-	STATE_UNDEFINED,
 };
 
 #define MAX_HIGH STATE_FH /* VCC, PU and FH are considered high */ 
@@ -370,6 +369,12 @@ setHigh(nodenum_t nn)
 	setNode(nn, 1);
 }
 
+/************************************************************
+ *
+ * Address Bus and Data Bus Interface
+ *
+ ************************************************************/
+
 /* the nodes that make the data bus */
 const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
 
@@ -383,6 +388,7 @@ writeDataBus(uint8_t x)
 		x >>= 1;
 	}
 
+	/* recalc all nodes connected starting from the data bus */
 	nodenum_t list[NODES];
 	bcopy(dbnodes, list, sizeof(dbnodes));
 	recalcNodeList(list, 8);
@@ -416,13 +422,6 @@ readAddressBus()
            (isNodeHigh(ab15) << 15); 
 }
 
-void
-handleBusRead()
-{
-	if (isNodeHigh(rw))
-		writeDataBus(mRead(readAddressBus()));
-}
-
 uint8_t
 readDataBus()
 {
@@ -444,16 +443,12 @@ mWrite(uint16_t a, uint8_t d)
 	memory[a] = d;
 }
 
-void
-handleBusWrite()
-{
-	if (!isNodeHigh(rw)) {
-		uint16_t a = readAddressBus();
-		uint8_t d = readDataBus();
-		mWrite(a,d);
-	}
-}
-
+/************************************************************
+ *
+ * Tracing/Debugging
+ *
+ ************************************************************/
+ 
 uint8_t
 readA()
 {
@@ -580,63 +575,37 @@ chipStatus()
 			readSP(),
 			readP(),
 			readNOTIR() ^ 0xFF);
-#if 0
-	var machine1 =
-	        ' halfcyc:' + cycle +
-	        ' phi0:' + readBit('clk0') +
-                ' AB:' + hexWord(ab) +
-	        ' D:' + hexByte(readDataBus()) +
-	        ' RnW:' + readBit('rw');
-	var machine2 =
-	        ' PC:' + hexWord(readPC()) +
-	        ' A:' + hexByte(readA()) +
-	        ' X:' + hexByte(readX()) +
-	        ' Y:' + hexByte(readY()) +
-	        ' SP:' + hexByte(readSP()) +
-	        ' ' + readPstring();
-	var machine3 =
-	        ' Sync:' + readBit('sync')
-		' IRQ:' + readBit('irq') +
-	        ' NMI:' + readBit('nmi');
-	var machine4 =
-	        ' IR:' + hexByte(255 - readBits('notir', 8)) +
-	        ' idl:' + hexByte(255 - readBits('idl', 8)) +
-	        ' alu:' + hexByte(255 - readBits('alu', 8)) +
-	        ' TCstate:' + readBit('clock1') + readBit('clock2') +
-                	readBit('t2') + readBit('t3') + readBit('t4') + readBit('t5');
-        var machine5 =
-                ' notRdy0:' + readBit('notRdy0') +
-                ' fetch:'   + readBit('fetch') +
-                ' clearIR:' + readBit('clearIR') +
-                ' D1x1:'    + readBit('D1x1');
-        setStatus(machine1 + "<br>" + machine2);
-	if (loglevel>2 && ctrace) {
-		console.log(machine1 + " " + machine2 + " " + machine3 + " " + machine4 + " " + machine5);
-	}
-#endif
 }
+
+/************************************************************
+ *
+ * Main CLock Loop
+ *
+ ************************************************************/
 
 void
 halfStep()
 {
-#ifdef DEBUG
-	printf("%s\n", __func__);
-#endif
-	if (isNodeHigh(clk0)) {
-		setLow(clk0);
-		handleBusRead();
-	} else {
-		setHigh(clk0);
-		handleBusWrite();
-	}
+	BOOL clk = isNodeHigh(clk0);
+
+	setNode(clk0, !clk);
+
+	if (clk && isNodeHigh(rw))
+		writeDataBus(mRead(readAddressBus()));
+
+	if (!clk && !isNodeHigh(rw))
+		mWrite(readAddressBus(), readDataBus());
 }
+
+/************************************************************
+ *
+ * Initialization
+ *
+ ************************************************************/
 
 void
 initChip()
 {
-#ifdef DEBUG
-	printf("%s\n", __func__);
-#endif
 	nodenum_t nn;
 	for (nn = 0; nn < NODES; nn++)
 		nodes_state[nn] = STATE_FL;
