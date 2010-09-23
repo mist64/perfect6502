@@ -9,36 +9,38 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef int BOOL;
 
-typedef uint16_t nodenum_t;
-typedef uint16_t transnum_t;
-typedef uint16_t count_t;
-typedef uint8_t state_t;
-
 #define NO 0
 #define YES 1
 
+/* nodes */
 #include "segdefs.h"
+/* transistors */
 #include "transdefs.h"
+/* node numbers of probes */
 #include "nodenames.h"
-
-#define ngnd vss
-#define npwr vcc
 
 enum {
 	STATE_VCC,
 	STATE_PU,
 	STATE_FH,
+#define isNodeHigh(nn) (nodes_state[nn] <= STATE_FH) /* everything above is high */
 	STATE_GND,
 	STATE_FL,
 	STATE_PD,
 };
 
-#define MAX_HIGH STATE_FH /* VCC, PU and FH are considered high */ 
-
+/* the 6502 consists of this many nodes and transistors */
 #define NODES 1725
 #define TRANSISTORS 3510
 
-BOOL nodes_pullup[NODES];//XXX no idea why this array overflows!!
+/* the smallest types to fit the numbers */
+typedef uint16_t nodenum_t;
+typedef uint16_t transnum_t;
+typedef uint16_t count_t;
+typedef uint8_t state_t;
+
+/* everything that describes a node */
+BOOL nodes_pullup[NODES];
 BOOL nodes_pulldown[NODES];
 state_t nodes_state[NODES];
 nodenum_t nodes_gates[NODES][NODES];
@@ -46,12 +48,36 @@ nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
 
-transnum_t transistors_name[TRANSISTORS];
+/* everything that describes a transistor */
 nodenum_t transistors_gate[TRANSISTORS];
 nodenum_t transistors_c1[TRANSISTORS];
 nodenum_t transistors_c2[TRANSISTORS];
 
-int transistors_on[TRANSISTORS/sizeof(int)+1];
+int transistors_on[TRANSISTORS/sizeof(int)+1]; /* bitfield */
+
+int cycle;
+
+uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
+
+/* a group of connected nodes with the same potential */
+nodenum_t group[NODES];
+count_t groupcount;
+int groupbitmap[NODES/sizeof(int)+1];
+
+/* list of nodes that need to be recalculated */
+typedef struct {
+	nodenum_t *list;
+	count_t count;
+	int *bitmap;
+} list_t;
+
+list_t recalc;
+
+/************************************************************
+ *
+ * Helpers for Data Structures
+ *
+ ************************************************************/
 
 void
 set_transistors_on(transnum_t t, BOOL state)
@@ -68,66 +94,11 @@ get_transistors_on(transnum_t t)
 	return (transistors_on[t>>5] >> (t & 31)) & 1;
 }
 
-uint8_t memory[65536];
-int cycle;
-
-uint8_t A, X, Y, S, P;
-uint16_t PC;
-BOOL N, Z, C;
-
-void
-setupNodesAndTransistors()
-{
-	count_t i;
-	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
-		nodes_pullup[i] = segdefs[i];
-		nodes_gatecount[i] = 0;
-		nodes_c1c2count[i] = 0;
-	}
-	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
-		nodenum_t gate = transdefs[i].gate;
-		nodenum_t c1 = transdefs[i].c1;
-		nodenum_t c2 = transdefs[i].c2;
-		transistors_name[i] = i;
-		transistors_gate[i] = gate;
-		transistors_c1[i] = c1;
-		transistors_c2[i] = c2;
-		nodes_gates[gate][nodes_gatecount[gate]++] = i;
-		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
-		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
-	}
-	nodes_state[ngnd] = STATE_GND;
-	nodes_state[npwr] = STATE_VCC;
-}
-
-#ifdef DEBUG
-void
-printarray(nodenum_t *array, count_t count)
-{
-	count_t i;
-	for (i = 0; i < count; i++)
-		printf("%d ", array[i]);
-	printf("\n");
-}
-#endif
-
-nodenum_t group[NODES];
-count_t groupcount;
-int groupbitmap[NODES/sizeof(int)+1];
-
 BOOL
 groupContains(nodenum_t el)
 {
 	return (groupbitmap[el>>5] >> (el & 31)) & 1;
 }
-
-typedef struct {
-	nodenum_t *list;
-	count_t count;
-	int *bitmap;
-} list_t;
-
-list_t recalc;
 
 BOOL
 recalcListContains(nodenum_t el)
@@ -135,7 +106,13 @@ recalcListContains(nodenum_t el)
 	return (recalc.bitmap[el>>5] >> (el & 31)) & 1;
 }
 
-void addNodeToGroup(nodenum_t i);
+/************************************************************
+ *
+ * Node and Transistor Emulation
+ *
+ ************************************************************/
+
+void addNodeToGroup(nodenum_t i); /* recursion! */
 
 void
 addNodeTransistor(nodenum_t node, transnum_t t)
@@ -144,6 +121,7 @@ addNodeTransistor(nodenum_t node, transnum_t t)
 	if (!get_transistors_on(t))
 		return;
 
+	/* if original node was connected to c1, put c2 into list and vice versa */
 	if (transistors_c1[t] == node)
 		addNodeToGroup(transistors_c2[t]);
 	else
@@ -159,7 +137,7 @@ addNodeToGroup(nodenum_t i)
 	group[groupcount++] = i;
 	groupbitmap[i>>5] |= 1 << (i & 31);
 
-	if (i == ngnd || i == npwr)
+	if (i == vss || i == vcc)
 		return;
 
 	for (count_t t = 0; t < nodes_c1c2count[i]; t++)
@@ -175,11 +153,14 @@ addNodeToGroup(nodenum_t i)
 state_t
 getNodeValue()
 {
-	if (groupContains(ngnd))
+	if (groupContains(vss))
 		return STATE_GND;
-	if (groupContains(npwr))
+
+	if (groupContains(vcc))
 		return STATE_VCC;
+
 	state_t flstate = STATE_FL;
+
 	for (count_t i = 0; i < groupcount; i++) {
 		nodenum_t nn = group[i];
 		if (nodes_pullup[nn])
@@ -196,7 +177,7 @@ void
 addRecalcNode(nodenum_t nn)
 {
 	/* no need to analyze VCC or GND */
-	if (nn == ngnd || nn == npwr)
+	if (nn == vss || nn == vcc)
 		return;
 
 	/* we already know about this node */
@@ -212,7 +193,7 @@ void
 floatnode(nodenum_t nn)
 {
 	/* VCC and GND are constant */
-	if (nn == ngnd || nn == npwr)
+	if (nn == vss || nn == vcc)
 		return;
 
 	state_t state = nodes_state[nn];
@@ -222,16 +203,6 @@ floatnode(nodenum_t nn)
 
 	if (state == STATE_VCC || state == STATE_PU)
 		nodes_state[nn] = STATE_FH;
-}
-
-BOOL
-isNodeHigh(nodenum_t nn)
-{
-#ifdef DEBUG
-	printf("%s nn=%d state=%d\n", __func__, nn, nodes[nn].state);
-	printf("%s nn=%d res=%d\n", __func__, nn, nodes[nn].state <= MAX_HIGH);
-#endif
-	return nodes_state[nn] <= MAX_HIGH;
 }
 
 void
@@ -260,7 +231,7 @@ recalcTransistor(transnum_t tn)
 void
 recalcNode(nodenum_t node)
 {
-	if (node == ngnd || node == npwr)
+	if (node == vss || node == vcc)
 		return;
 
 	groupcount = 0;
@@ -584,6 +555,13 @@ chipStatus()
  *
  ************************************************************/
 
+extern int kernal_dispatch();
+
+/* imported by runtime.c */
+uint8_t A, X, Y, S, P;
+uint16_t PC;
+BOOL N, Z, C;
+
 void
 init_monitor()
 {
@@ -703,6 +681,30 @@ step()
  ************************************************************/
 
 void
+setupNodesAndTransistors()
+{
+	count_t i;
+	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
+		nodes_pullup[i] = segdefs[i];
+		nodes_gatecount[i] = 0;
+		nodes_c1c2count[i] = 0;
+	}
+	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
+		nodenum_t gate = transdefs[i].gate;
+		nodenum_t c1 = transdefs[i].c1;
+		nodenum_t c2 = transdefs[i].c2;
+		transistors_gate[i] = gate;
+		transistors_c1[i] = c1;
+		transistors_c2[i] = c2;
+		nodes_gates[gate][nodes_gatecount[gate]++] = i;
+		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
+		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
+	}
+	nodes_state[vss] = STATE_GND;
+	nodes_state[vcc] = STATE_VCC;
+}
+
+void
 initChip()
 {
 	/* all nodes are floating */
@@ -730,6 +732,12 @@ initChip()
 	/* release RESET */
 	setHigh(res);
 }
+
+/************************************************************
+ *
+ * Main
+ *
+ ************************************************************/
 
 int
 main()
