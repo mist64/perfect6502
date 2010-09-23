@@ -145,13 +145,6 @@ typedef struct {
 
 list_t recalc;
 
-void
-clearRecalc()
-{
-	bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
-	recalc.count = 0;
-}
-
 BOOL
 recalcListContains(nodenum_t el)
 {
@@ -336,7 +329,8 @@ recalcNodeList(nodenum_t *list, count_t count)
 	count_t i;
 	int j;
 	for (j = 0; j < 100; j++) {	// loop limiter
-		clearRecalc();
+		bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
+		recalc.count = 0;
 
 		if (!current.count)
 			return;
@@ -366,39 +360,26 @@ recalcAllNodes()
 	recalcNodeList(list, NODES);
 }
 
-void
-setLow(nodenum_t nn)
+static inline void
+setNode(nodenum_t nn, BOOL state)
 {
-#ifdef DEBUG
-	printf("%s nn=%d\n", __func__, nn);
-#endif
-	nodes_pullup[nn] = NO;
-	nodes_pulldown[nn] = YES;
+	nodes_pullup[nn] = state;
+	nodes_pulldown[nn] = !state;
 	nodenum_t list[NODES];
 	list[0] = nn;
 	recalcNodeList(list, 1);
+}
+
+void
+setLow(nodenum_t nn)
+{
+	setNode(nn, 0);
 }
 
 void
 setHigh(nodenum_t nn)
 {
-#ifdef DEBUG
-	printf("%s nn=%d\n", __func__, nn);
-#endif
-	nodes_pullup[nn] = YES;
-	nodes_pulldown[nn] = NO;
-	nodenum_t list[NODES];
-	list[0] = nn;
-	recalcNodeList(list, 1);
-}
-
-void
-setHighLow(nodenum_t nn, BOOL val)
-{
-	if (val)
-		setHigh(nn);
-	else
-		setLow(nn);
+	setNode(nn, 1);
 }
 
 void
@@ -496,117 +477,6 @@ handleBusWrite()
 		uint8_t d = readDataBus();
 		mWrite(a,d);
 	}
-}
-
-void
-setA(uint8_t val)
-{
-	setHighLow(a0, (val >> 0) & 1);
-	setHighLow(a1, (val >> 1) & 1);
-	setHighLow(a2, (val >> 2) & 1);
-	setHighLow(a3, (val >> 3) & 1);
-	setHighLow(a4, (val >> 4) & 1);
-	setHighLow(a5, (val >> 5) & 1);
-	setHighLow(a6, (val >> 6) & 1);
-	setHighLow(a7, (val >> 7) & 1);	
-}
-
-void
-setX(uint8_t val)
-{
-	setHighLow(x0, (val >> 0) & 1);
-	setHighLow(x1, (val >> 1) & 1);
-	setHighLow(x2, (val >> 2) & 1);
-	setHighLow(x3, (val >> 3) & 1);
-	setHighLow(x4, (val >> 4) & 1);
-	setHighLow(x5, (val >> 5) & 1);
-	setHighLow(x6, (val >> 6) & 1);
-	setHighLow(x7, (val >> 7) & 1);	
-}
-
-void
-setY(uint8_t val)
-{
-	setHighLow(y0, (val >> 0) & 1);
-	setHighLow(y1, (val >> 1) & 1);
-	setHighLow(y2, (val >> 2) & 1);
-	setHighLow(y3, (val >> 3) & 1);
-	setHighLow(y4, (val >> 4) & 1);
-	setHighLow(y5, (val >> 5) & 1);
-	setHighLow(y6, (val >> 6) & 1);
-	setHighLow(y7, (val >> 7) & 1);	
-}
-
-void
-setSP(uint8_t val)
-{
-	setHighLow(s0, (val >> 0) & 1);
-	setHighLow(s1, (val >> 1) & 1);
-	setHighLow(s2, (val >> 2) & 1);
-	setHighLow(s3, (val >> 3) & 1);
-	setHighLow(s4, (val >> 4) & 1);
-	setHighLow(s5, (val >> 5) & 1);
-	setHighLow(s6, (val >> 6) & 1);
-	setHighLow(s7, (val >> 7) & 1);	
-}
-
-void
-setP(uint8_t val)
-{
-	setHighLow(p0, (val >> 0) & 1);
-	setHighLow(p1, (val >> 1) & 1);
-	setHighLow(p2, (val >> 2) & 1);
-	setHighLow(p3, (val >> 3) & 1);
-	setHighLow(p4, (val >> 4) & 1);
-	setHighLow(p5, (val >> 5) & 1);
-	setHighLow(p6, (val >> 6) & 1);
-	setHighLow(p7, (val >> 7) & 1);	
-}
-
-void
-setNOTIR(uint8_t val)
-{
-	setHighLow(notir0, (val >> 0) & 1);
-	setHighLow(notir1, (val >> 1) & 1);
-	setHighLow(notir2, (val >> 2) & 1);
-	setHighLow(notir3, (val >> 3) & 1);
-	setHighLow(notir4, (val >> 4) & 1);
-	setHighLow(notir5, (val >> 5) & 1);
-	setHighLow(notir6, (val >> 6) & 1);
-	setHighLow(notir7, (val >> 7) & 1);	
-}
-
-void
-setPCL(uint8_t val)
-{
-	setHighLow(pcl0, (val >> 0) & 1);
-	setHighLow(pcl1, (val >> 1) & 1);
-	setHighLow(pcl2, (val >> 2) & 1);
-	setHighLow(pcl3, (val >> 3) & 1);
-	setHighLow(pcl4, (val >> 4) & 1);
-	setHighLow(pcl5, (val >> 5) & 1);
-	setHighLow(pcl6, (val >> 6) & 1);
-	setHighLow(pcl7, (val >> 7) & 1);	
-}
-
-void
-setPCH(uint8_t val)
-{
-	setHighLow(pch0, (val >> 0) & 1);
-	setHighLow(pch1, (val >> 1) & 1);
-	setHighLow(pch2, (val >> 2) & 1);
-	setHighLow(pch3, (val >> 3) & 1);
-	setHighLow(pch4, (val >> 4) & 1);
-	setHighLow(pch5, (val >> 5) & 1);
-	setHighLow(pch6, (val >> 6) & 1);
-	setHighLow(pch7, (val >> 7) & 1);	
-}
-
-void
-setPC(uint16_t val)
-{
-	setPCL(val & 0xFF);
-	setPCH(val >> 8);
 }
 
 uint8_t
