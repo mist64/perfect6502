@@ -17,8 +17,6 @@ typedef uint8_t state_t;
 #define NO 0
 #define YES 1
 
-#define SWAPLIST(a,b) {list_t tmp = a; a = b; b = tmp; }
-
 #include "segdefs.h"
 #include "transdefs.h"
 #include "nodenames.h"
@@ -122,19 +120,9 @@ count_t groupcount;
 int groupbitmap[NODES/sizeof(int)+1];
 
 BOOL
-arrayContains(nodenum_t el)
+groupContains(nodenum_t el)
 {
-#if 0
-	count_t i;
-	for (i = 0; i < groupcount; i++) {
-		if (group[i] == el) {
-			return YES;
-		}
-	}
-	return NO;
-#else
 	return (groupbitmap[el>>5] >> (el & 31)) & 1;
-#endif
 }
 
 typedef struct {
@@ -181,7 +169,7 @@ addNodeToGroup(nodenum_t i)
 	printf("%s %d, group=", __func__, i);
 	printarray(group, groupcount);
 #endif
-	if (arrayContains(i))
+	if (groupContains(i))
 		return;
 	group[groupcount++] = i;
 	groupbitmap[i>>5] |= 1 << (i & 31);
@@ -197,13 +185,9 @@ addNodeToGroup(nodenum_t i)
 state_t
 getNodeValue()
 {
-#ifdef DEBUG
-	printf("%s group=", __func__);
-	printarray(group, groupcount);
-#endif
-	if (arrayContains(ngnd))
+	if (groupContains(ngnd))
 		return STATE_GND;
-	if (arrayContains(npwr))
+	if (groupContains(npwr))
 		return STATE_VCC;
 	state_t flstate = STATE_UNDEFINED;
 	count_t i;
@@ -286,10 +270,6 @@ recalcTransistor(transnum_t tn)
 void
 recalcNode(nodenum_t node)
 {
-#ifdef DEBUG
-	printf("%s node=%d, recalc.list=", __func__, node);
-	printarray(recalc.list, recalc.count);
-#endif
 	if (node == ngnd || node == npwr)
 		return;
 
@@ -310,10 +290,6 @@ recalcNode(nodenum_t node)
 void
 recalcNodeList(nodenum_t *list, count_t count)
 {
-#ifdef DEBUG
-	printf("%s list=", __func__);
-	printarray(list, count);
-#endif
 	nodenum_t list1[NODES];
 	int bitmap1[NODES/sizeof(int)+1];
 	int bitmap2[NODES/sizeof(int)+1];
@@ -326,23 +302,19 @@ recalcNodeList(nodenum_t *list, count_t count)
 	recalc.list = list1;
 	recalc.bitmap = bitmap1;
 
-	count_t i;
-	int j;
-	for (j = 0; j < 100; j++) {	// loop limiter
+	for (int j = 0; j < 100; j++) {	// loop limiter
+		if (!current.count)
+			return;
+
 		bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
 		recalc.count = 0;
 
-		if (!current.count)
-			return;
-#ifdef DEBUG
-		printf("%s iteration=%d, current.list=", __func__, j);
-		printarray(current.list, current.count);
-#endif
-		for (i = 0; i < current.count; i++)
+		for (count_t i = 0; i < current.count; i++)
 			recalcNode(current.list[i]);
 
-		SWAPLIST(current, recalc);
-
+		list_t tmp = current;
+		current = recalc;
+		recalc = tmp;
 	}
 }
 
