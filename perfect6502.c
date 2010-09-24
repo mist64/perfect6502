@@ -63,13 +63,13 @@ typedef int BOOL;
  ************************************************************/
 
 enum {
-	STATE_VCC,
-	STATE_PU,
-	STATE_FH,
+	STATE_VCC, /* node is VCC */
+	STATE_PU,  /* node is connected to VCC */
+	STATE_FH,  /* node was connected to VCC */
 #define isNodeHigh(nn) (nodes_state[nn] <= STATE_FH) /* everything above is high */
-	STATE_GND,
-	STATE_FL,
-	STATE_PD,
+	STATE_GND, /* node is GND */
+	STATE_PD,  /* node is connexted to GND */
+	STATE_FL,  /* node was connected to GND */
 };
 
 /* the smallest types to fit the numbers */
@@ -313,12 +313,14 @@ addNodeToGroup(nodenum_t i)
 }
 
 /*
- * 1. if there is a pullup node, it's STATE_PU
- * 2. if there is a pulldown node, it's STATE_PD
+ * 1. if the group is connected to GND, it's STATE_GND
+ * 2. if the group is connected to VCC, it's STATE_VCC
+ * 3a. if there is a pullup node, it's STATE_PU
+ * 3b. if there is a pulldown node, it's STATE_PD
  * (if both 1 and 2 are true, the first pullup or pulldown wins, with
  * a statistical advantage towards STATE_PU)
- * 3. otherwise, if there is an FH node, it's STATE_FH
- * 4. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
+ * 4. otherwise, if there is an FH node, it's STATE_FH
+ * 5. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
  */
 state_t
 getNodeValue()
