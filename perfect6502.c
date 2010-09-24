@@ -92,55 +92,67 @@ typedef struct {
 	int *bitmap;
 } list_t;
 
-nodenum_t list[NODES];
-
-/* storage for secondary list and two sets of bitmaps */
+/* the nodes we are working with */
 nodenum_t list1[NODES];
 int bitmap1[NODES/sizeof(int)+1];
-int bitmap2[NODES/sizeof(int)+1];
-
-/* the nodes we are working with */
-list_t current = {
-	.list = list,
-	.bitmap = bitmap2
-};
-
-/* the nodes we are collecting for the next run */
-list_t recalc = {
+list_t listin = {
 	.list = list1,
 	.bitmap = bitmap1
 };
 
-static inline void
-recalclist_init()
-{
-	bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
-	recalc.count = 0;
-}
+/* the nodes we are collecting for the next run */
+nodenum_t list2[NODES];
+int bitmap2[NODES/sizeof(int)+1];
+list_t listout = {
+	.list = list2,
+	.bitmap = bitmap2
+};
 
 void
-recalclist_add(nodenum_t i)
+listin_fill(const nodenum_t *source, count_t count)
 {
-	recalc.list[recalc.count++] = i;
-	recalc.bitmap[i>>5] |= 1 << (i & 31);
-}
-
-static inline BOOL
-recalclist_contains(nodenum_t el)
-{
-	return (recalc.bitmap[el>>5] >> (el & 31)) & 1;
-}
-
-count_t
-currentlist_count()
-{
-	return current.count;
+	bcopy(source, listin.list, count * sizeof(nodenum_t));
+	listin.count = count;
 }
 
 nodenum_t
-currentlist_get(count_t i)
+listin_get(count_t i)
 {
-	return current.list[i];
+	return listin.list[i];
+}
+
+count_t
+listin_count()
+{
+	return listin.count;
+}
+
+void
+lists_switch()
+{
+	list_t tmp = listin;
+	listin = listout;
+	listout = tmp;
+}
+
+static inline void
+listout_clear()
+{
+	bzero(listout.bitmap, sizeof(*listout.bitmap)*NODES/sizeof(int));
+	listout.count = 0;
+}
+
+void
+listout_add(nodenum_t i)
+{
+	listout.list[listout.count++] = i;
+	listout.bitmap[i>>5] |= 1 << (i & 31);
+}
+
+static inline BOOL
+listout_contains(nodenum_t el)
+{
+	return (listout.bitmap[el>>5] >> (el & 31)) & 1;
 }
 
 /************************************************************
@@ -161,7 +173,7 @@ static count_t groupcount;
 static int groupbitmap[NODES/sizeof(int)+1];
 
 static inline void
-group_init()
+group_clear()
 {
 	groupcount = 0;
 	bzero(groupbitmap, sizeof(groupbitmap));
@@ -266,11 +278,11 @@ addRecalcNode(nodenum_t nn)
 		return;
 
 	/* we already know about this node */
-	if (recalclist_contains(nn))
+	if (listout_contains(nn))
 		return;
 
 	/* add node to list */
-	recalclist_add(nn);
+	listout_add(nn);
 }
 
 void
@@ -318,7 +330,7 @@ recalcNode(nodenum_t node)
 	if (node == vss || node == vcc)
 		return;
 
-	group_init();
+	group_clear();
 
 	/*
 	 * get all nodes that are connected through
@@ -352,10 +364,10 @@ void
 recalcNodeList()
 {
 	for (int j = 0; j < 100; j++) {	// loop limiter
-		if (!current.count)
+		if (!listin_count())
 			return;
 
-		recalclist_init();
+		listout_clear();
 
 		/*
 		 * for all nodes, follow their paths through
@@ -364,26 +376,25 @@ recalcNodeList()
 		 * all transistors controlled by this path, collecting
 		 * all nodes that changed because of it for the next run
 		 */
-		for (count_t i = 0; i < currentlist_count(); i++)
-			recalcNode(currentlist_get(i));
+		for (count_t i = 0; i < listin_count(); i++)
+			recalcNode(listin_get(i));
 
 		/*
 		 * make the secondary list our primary list, use
 		 * the data storage of the primary list as the
 		 * secondary list
 		 */
-		list_t tmp = current;
-		current = recalc;
-		recalc = tmp;
+		lists_switch();
 	}
 }
 
 void
 recalcAllNodes()
 {
+	nodenum_t temp[NODES];
 	for (count_t i = 0; i < NODES; i++)
-		current.list[i] = i;
-	current.count = NODES;
+		temp[i] = i;
+	listin_fill(temp, NODES);
 	recalcNodeList();
 }
 
@@ -392,8 +403,7 @@ setNode(nodenum_t nn, BOOL state)
 {
 	nodes_pullup[nn] = state;
 	nodes_pulldown[nn] = !state;
-	current.list[0] = nn;
-	current.count = 1;
+	listin_fill(&nn, 1);
 	recalcNodeList();
 }
 
@@ -429,8 +439,7 @@ writeDataBus(uint8_t x)
 	}
 
 	/* recalc all nodes connected starting from the data bus */
-	bcopy(dbnodes, current.list, sizeof(dbnodes));
-	current.count = 8;
+	listin_fill(dbnodes, 8);
 	recalcNodeList();
 }
 
