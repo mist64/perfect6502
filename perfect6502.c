@@ -62,8 +62,6 @@ typedef int BOOL;
  *
  ************************************************************/
 
-#define isNodeHigh(nn) (get_nodes_state_value(nn))
-
 /* the smallest types to fit the numbers */
 typedef uint16_t nodenum_t;
 typedef uint16_t transnum_t;
@@ -345,7 +343,7 @@ addNodeToGroup(nodenum_t i)
  * 4. otherwise, if there is an 1/floating node, it's 1/floating
  * 5. otherwise, it's 0/floating (if there is a 0/floating node, which is always the case)
  */
-void
+static inline void
 getNodeValue(BOOL *value, BOOL *floating)
 {
 	if (group_contains(vss)) {
@@ -402,6 +400,8 @@ floatnode(nodenum_t nn)
 	if (nn != vss && nn != vcc)
 		set_nodes_state_floating(nn, 1);
 }
+
+static inline BOOL isNodeHigh(nodenum_t nn);
 
 void
 recalcTransistor(transnum_t tn)
@@ -502,6 +502,12 @@ recalcAllNodes()
 	recalcNodeList(temp, NODES);
 }
 
+/************************************************************
+ *
+ * Node State
+ *
+ ************************************************************/
+
 static inline void
 setNode(nodenum_t nn, BOOL state)
 {
@@ -520,6 +526,12 @@ void
 setHigh(nodenum_t nn)
 {
 	setNode(nn, 1);
+}
+
+static inline BOOL
+isNodeHigh(nodenum_t nn)
+{
+	return get_nodes_state_value(nn);
 }
 
 /************************************************************
