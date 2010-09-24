@@ -85,13 +85,43 @@ typedef uint8_t state_t;
  ************************************************************/
 
 /* everything that describes a node */
-BOOL nodes_pullup[NODES];
-BOOL nodes_pulldown[NODES];
+int nodes_pullup[NODES/sizeof(int)+1];
+int nodes_pulldown[NODES/sizeof(int)+1];
 state_t nodes_state[NODES];
 nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
+
+static inline void
+set_nodes_pullup(transnum_t t, BOOL state)
+{
+	if (state)
+		nodes_pullup[t>>5] |= 1 << (t & 31);
+	else
+		nodes_pullup[t>>5] &= ~(1 << (t & 31));
+}
+
+static inline BOOL
+get_nodes_pullup(transnum_t t)
+{
+	return (nodes_pullup[t>>5] >> (t & 31)) & 1;
+}
+
+static inline void
+set_nodes_pulldown(transnum_t t, BOOL state)
+{
+	if (state)
+		nodes_pulldown[t>>5] |= 1 << (t & 31);
+	else
+		nodes_pulldown[t>>5] &= ~(1 << (t & 31));
+}
+
+static inline BOOL
+get_nodes_pulldown(transnum_t t)
+{
+	return (nodes_pulldown[t>>5] >> (t & 31)) & 1;
+}
 
 /************************************************************
  *
@@ -303,9 +333,9 @@ getNodeValue()
 
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		if (nodes_pullup[nn])
+		if (get_nodes_pullup(nn))
 			return STATE_PU;
-		if (nodes_pulldown[nn])
+		if (get_nodes_pulldown(nn))
 			return STATE_PD;
 		if (nodes_state[nn] == STATE_FH)
 			flstate = STATE_FH;
@@ -444,8 +474,8 @@ recalcAllNodes()
 static inline void
 setNode(nodenum_t nn, BOOL state)
 {
-	nodes_pullup[nn] = state;
-	nodes_pulldown[nn] = !state;
+	set_nodes_pullup(nn, state);
+	set_nodes_pulldown(nn, !state);
 	listin_fill(&nn, 1);
 	recalcNodeList();
 }
@@ -478,8 +508,8 @@ writeDataBus(uint8_t x)
 {
 	for (int i = 0; i < 8; i++) {
 		nodenum_t nn = dbnodes[i];
-		nodes_pulldown[nn] = !(x & 1);
-		nodes_pullup[nn] = x & 1;
+		set_nodes_pulldown(nn, !(x & 1));
+		set_nodes_pullup(nn, x & 1);
 		x >>= 1;
 	}
 
@@ -809,7 +839,7 @@ setupNodesAndTransistors()
 {
 	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
-		nodes_pullup[i] = segdefs[i] == 1;
+		set_nodes_pullup(i, segdefs[i] == 1);
 		nodes_gatecount[i] = 0;
 		nodes_c1c2count[i] = 0;
 	}
