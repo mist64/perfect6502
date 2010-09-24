@@ -62,15 +62,13 @@ typedef int BOOL;
  *
  ************************************************************/
 
-enum {
-	STATE_VCC, /* node is VCC */
-	STATE_PU,  /* node is connected to VCC */
-	STATE_FH,  /* node was connected to VCC */
-#define isNodeHigh(nn) (nodes_state[nn] <= STATE_FH) /* everything above is high */
-	STATE_GND, /* node is GND */
-	STATE_PD,  /* node is connexted to GND */
-	STATE_FL,  /* node was connected to GND */
-};
+#define STATE_0 0
+#define STATE_1 1
+#define STATE_FLOATING 2
+#define STATE_0_FLOATING (STATE_0 | STATE_FLOATING)
+#define STATE_1_FLOATING (STATE_1 | STATE_FLOATING)
+
+#define isNodeHigh(nn) (nodes_state[nn] & 1)
 
 /* the smallest types to fit the numbers */
 typedef uint16_t nodenum_t;
@@ -313,34 +311,34 @@ addNodeToGroup(nodenum_t i)
 }
 
 /*
- * 1. if the group is connected to GND, it's STATE_GND
- * 2. if the group is connected to VCC, it's STATE_VCC
- * 3a. if there is a pullup node, it's STATE_PU
- * 3b. if there is a pulldown node, it's STATE_PD
+ * 1. if the group is connected to GND, it's STATE_0
+ * 2. if the group is connected to VCC, it's STATE_1
+ * 3a. if there is a pullup node, it's STATE_1
+ * 3b. if there is a pulldown node, it's STATE_0
  * (if both 1 and 2 are true, the first pullup or pulldown wins, with
- * a statistical advantage towards STATE_PU)
- * 4. otherwise, if there is an FH node, it's STATE_FH
- * 5. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
+ * a statistical advantage towards STATE_1)
+ * 4. otherwise, if there is an FH node, it's STATE_1_FLOATING
+ * 5. otherwise, it's STATE_0_FLOATING (if there is an FL node, which is always the case)
  */
 state_t
 getNodeValue()
 {
 	if (group_contains(vss))
-		return STATE_GND;
+		return STATE_0;
 
 	if (group_contains(vcc))
-		return STATE_VCC;
+		return STATE_1;
 
-	state_t flstate = STATE_FL;
+	state_t flstate = STATE_0_FLOATING;
 
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
 		if (get_nodes_pullup(nn))
-			return STATE_PU;
+			return STATE_1;
 		if (get_nodes_pulldown(nn))
-			return STATE_PD;
-		if (nodes_state[nn] == STATE_FH)
-			flstate = STATE_FH;
+			return STATE_0;
+		if (nodes_state[nn] == STATE_1_FLOATING)
+			flstate = STATE_1_FLOATING;
 	}
 	return flstate;
 }
@@ -364,16 +362,8 @@ void
 floatnode(nodenum_t nn)
 {
 	/* VCC and GND are constant */
-	if (nn == vss || nn == vcc)
-		return;
-
-	state_t state = nodes_state[nn];
-
-	if (state == STATE_GND || state == STATE_PD)
-		nodes_state[nn] = STATE_FL;
-
-	if (state == STATE_VCC || state == STATE_PU)
-		nodes_state[nn] = STATE_FH;
+	if (nn != vss && nn != vcc)
+		nodes_state[nn] |= STATE_FLOATING;
 }
 
 void
@@ -854,8 +844,8 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
-	nodes_state[vss] = STATE_GND;
-	nodes_state[vcc] = STATE_VCC;
+	nodes_state[vss] = STATE_0;
+	nodes_state[vcc] = STATE_1;
 }
 
 void
@@ -863,7 +853,7 @@ initChip()
 {
 	/* all nodes are floating */
 	for (nodenum_t nn = 0; nn < NODES; nn++)
-		nodes_state[nn] = STATE_FL;
+		nodes_state[nn] = STATE_0_FLOATING;
 	/* all transistors are off */
 	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
 		set_transistors_on(tn, NO);
