@@ -58,15 +58,6 @@ int cycle;
 
 uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
 
-/* list of nodes that need to be recalculated */
-typedef struct {
-	nodenum_t *list;
-	count_t count;
-	int *bitmap;
-} list_t;
-
-list_t recalc;
-
 /************************************************************
  *
  * Helpers for Data Structures
@@ -88,10 +79,68 @@ get_transistors_on(transnum_t t)
 	return (transistors_on[t>>5] >> (t & 31)) & 1;
 }
 
-BOOL
-recalcListContains(nodenum_t el)
+/************************************************************
+ *
+ * Data Structures and Algorithms for Lists
+ *
+ ************************************************************/
+
+/* list of nodes that need to be recalculated */
+typedef struct {
+	nodenum_t *list;
+	count_t count;
+	int *bitmap;
+} list_t;
+
+nodenum_t list[NODES];
+
+/* storage for secondary list and two sets of bitmaps */
+nodenum_t list1[NODES];
+int bitmap1[NODES/sizeof(int)+1];
+int bitmap2[NODES/sizeof(int)+1];
+
+/* the nodes we are working with */
+list_t current = {
+	.list = list,
+	.bitmap = bitmap2
+};
+
+/* the nodes we are collecting for the next run */
+list_t recalc = {
+	.list = list1,
+	.bitmap = bitmap1
+};
+
+static inline void
+recalclist_init()
+{
+	bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
+	recalc.count = 0;
+}
+
+void
+recalclist_add(nodenum_t i)
+{
+	recalc.list[recalc.count++] = i;
+	recalc.bitmap[i>>5] |= 1 << (i & 31);
+}
+
+static inline BOOL
+recalclist_contains(nodenum_t el)
 {
 	return (recalc.bitmap[el>>5] >> (el & 31)) & 1;
+}
+
+count_t
+currentlist_count()
+{
+	return current.count;
+}
+
+nodenum_t
+currentlist_get(count_t i)
+{
+	return current.list[i];
 }
 
 /************************************************************
@@ -217,12 +266,11 @@ addRecalcNode(nodenum_t nn)
 		return;
 
 	/* we already know about this node */
-	if (recalcListContains(nn))
+	if (recalclist_contains(nn))
 		return;
 
 	/* add node to list */
-	recalc.list[recalc.count++] = nn;
-	recalc.bitmap[nn>>5] |= 1 << (nn & 31);
+	recalclist_add(nn);
 }
 
 void
@@ -301,30 +349,13 @@ recalcNode(nodenum_t node)
  * at least be able to hold NODES elements!
  */
 void
-recalcNodeList(nodenum_t *list, count_t count)
+recalcNodeList()
 {
-	/* storage for secondary list and two sets of bitmaps */
-	nodenum_t list1[NODES];
-	int bitmap1[NODES/sizeof(int)+1];
-	int bitmap2[NODES/sizeof(int)+1];
-
-	/* the nodes we are working with */
-	list_t current;
-	current.list = list;
-	current.count = count;
-	current.bitmap = bitmap2;
-
-	/* the nodes we are collecting for the next run */
-	recalc.list = list1;
-	recalc.bitmap = bitmap1;
-
 	for (int j = 0; j < 100; j++) {	// loop limiter
 		if (!current.count)
 			return;
 
-		/* clear secondary list */
-		bzero(recalc.bitmap, sizeof(*recalc.bitmap)*NODES/sizeof(int));
-		recalc.count = 0;
+		recalclist_init();
 
 		/*
 		 * for all nodes, follow their paths through
@@ -333,8 +364,8 @@ recalcNodeList(nodenum_t *list, count_t count)
 		 * all transistors controlled by this path, collecting
 		 * all nodes that changed because of it for the next run
 		 */
-		for (count_t i = 0; i < current.count; i++)
-			recalcNode(current.list[i]);
+		for (count_t i = 0; i < currentlist_count(); i++)
+			recalcNode(currentlist_get(i));
 
 		/*
 		 * make the secondary list our primary list, use
@@ -350,10 +381,10 @@ recalcNodeList(nodenum_t *list, count_t count)
 void
 recalcAllNodes()
 {
-	nodenum_t list[NODES];
 	for (count_t i = 0; i < NODES; i++)
-		list[i] = i;
-	recalcNodeList(list, NODES);
+		current.list[i] = i;
+	current.count = NODES;
+	recalcNodeList();
 }
 
 static inline void
@@ -361,9 +392,9 @@ setNode(nodenum_t nn, BOOL state)
 {
 	nodes_pullup[nn] = state;
 	nodes_pulldown[nn] = !state;
-	nodenum_t list[NODES];
-	list[0] = nn;
-	recalcNodeList(list, 1);
+	current.list[0] = nn;
+	current.count = 1;
+	recalcNodeList();
 }
 
 void
@@ -398,9 +429,9 @@ writeDataBus(uint8_t x)
 	}
 
 	/* recalc all nodes connected starting from the data bus */
-	nodenum_t list[NODES];
-	bcopy(dbnodes, list, sizeof(dbnodes));
-	recalcNodeList(list, 8);
+	bcopy(dbnodes, current.list, sizeof(dbnodes));
+	current.count = 8;
+	recalcNodeList();
 }
 
 uint8_t mRead(uint16_t a)
