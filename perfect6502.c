@@ -1,4 +1,32 @@
+/*
+ Copyright (c) 2010 Michael Steil, Brian Silverman, Barry Silverman
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
+*/
+
 int verbose = 0;
+
+/************************************************************
+ *
+ * Libc Functions and Basic Data Types
+ *
+ ************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,12 +39,28 @@ typedef int BOOL;
 #define NO 0
 #define YES 1
 
+/************************************************************
+ *
+ * 6502 Description: Nodes, Transistors and Probes
+ *
+ ************************************************************/
+
 /* nodes */
 #include "segdefs.h"
 /* transistors */
 #include "transdefs.h"
 /* node numbers of probes */
 #include "nodenames.h"
+
+/* the 6502 consists of this many nodes and transistors */
+#define NODES 1725
+#define TRANSISTORS 3510
+
+/************************************************************
+ *
+ * Global Data Types
+ *
+ ************************************************************/
 
 enum {
 	STATE_VCC,
@@ -28,15 +72,17 @@ enum {
 	STATE_PD,
 };
 
-/* the 6502 consists of this many nodes and transistors */
-#define NODES 1725
-#define TRANSISTORS 3510
-
 /* the smallest types to fit the numbers */
 typedef uint16_t nodenum_t;
 typedef uint16_t transnum_t;
 typedef uint16_t count_t;
 typedef uint8_t state_t;
+
+/************************************************************
+ *
+ * Data Structures for Nodes
+ *
+ ************************************************************/
 
 /* everything that describes a node */
 BOOL nodes_pullup[NODES];
@@ -47,24 +93,19 @@ nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
 
+/************************************************************
+ *
+ * Data Structures and Algorithms for Transistors
+ *
+ ************************************************************/
+
 /* everything that describes a transistor */
 nodenum_t transistors_gate[TRANSISTORS];
 nodenum_t transistors_c1[TRANSISTORS];
 nodenum_t transistors_c2[TRANSISTORS];
+int transistors_on[TRANSISTORS/sizeof(int)+1];
 
-int transistors_on[TRANSISTORS/sizeof(int)+1]; /* bitfield */
-
-int cycle;
-
-uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
-
-/************************************************************
- *
- * Helpers for Data Structures
- *
- ************************************************************/
-
-void
+static inline void
 set_transistors_on(transnum_t t, BOOL state)
 {
 	if (state)
@@ -73,7 +114,7 @@ set_transistors_on(transnum_t t, BOOL state)
 		transistors_on[t>>5] &= ~(1 << (t & 31));
 }
 
-BOOL
+static inline BOOL
 get_transistors_on(transnum_t t)
 {
 	return (transistors_on[t>>5] >> (t & 31)) & 1;
@@ -108,26 +149,26 @@ list_t listout = {
 	.bitmap = bitmap2
 };
 
-void
+static inline void
 listin_fill(const nodenum_t *source, count_t count)
 {
 	bcopy(source, listin.list, count * sizeof(nodenum_t));
 	listin.count = count;
 }
 
-nodenum_t
+static inline nodenum_t
 listin_get(count_t i)
 {
 	return listin.list[i];
 }
 
-count_t
+static inline count_t
 listin_count()
 {
 	return listin.count;
 }
 
-void
+static inline void
 lists_switch()
 {
 	list_t tmp = listin;
@@ -142,7 +183,7 @@ listout_clear()
 	listout.count = 0;
 }
 
-void
+static inline void
 listout_add(nodenum_t i)
 {
 	listout.list[listout.count++] = i;
@@ -241,12 +282,14 @@ addNodeToGroup(nodenum_t i)
 		addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
-// 1. if there is a pullup node, it's STATE_PU
-// 2. if there is a pulldown node, it's STATE_PD
-// (if both 1 and 2 are true, the first pullup or pulldown wins, with
-// a statistical advantage towards STATE_PU)
-// 3. otherwise, if there is an FH node, it's STATE_FH
-// 4. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
+/*
+ * 1. if there is a pullup node, it's STATE_PU
+ * 2. if there is a pulldown node, it's STATE_PD
+ * (if both 1 and 2 are true, the first pullup or pulldown wins, with
+ * a statistical advantage towards STATE_PU)
+ * 3. otherwise, if there is an FH node, it's STATE_FH
+ * 4. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
+ */
 state_t
 getNodeValue()
 {
@@ -363,7 +406,7 @@ recalcNode(nodenum_t node)
 void
 recalcNodeList()
 {
-	for (int j = 0; j < 100; j++) {	// loop limiter
+	for (int j = 0; j < 100; j++) {	/* loop limiter */
 		if (!listin_count())
 			return;
 
@@ -424,6 +467,8 @@ setHigh(nodenum_t nn)
  * Address Bus and Data Bus Interface
  *
  ************************************************************/
+
+uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
 
 /* the nodes that make the data bus */
 const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
@@ -608,6 +653,8 @@ readPC()
 	return (readPCH() << 8) | readPCL();
 }
 
+static int cycle;
+
 void
 chipStatus()
 {
@@ -691,7 +738,7 @@ handle_monitor()
 		kernal_dispatch();
 
 		/* encode processor status */
-		P &= 0x7C; // clear N, Z, C
+		P &= 0x7C; /* clear N, Z, C */
 		P |= (N << 7) | (Z << 1) | C;
 
 		/*
@@ -748,16 +795,6 @@ step()
 	if (verbose)
 		chipStatus();
 
-#if 0
-	for (int i = 0; i < NODES; i++) {
-//		if (nodes_pullup[i] && nodes_pulldown[i])
-//			printf("BOTH %d\n", i);
-		if (!nodes_pullup[i] && !nodes_pulldown[i])
-			printf("%d ", i);
-	}
-	printf("\n");
-#endif
-
 	handle_monitor();
 }
 
@@ -773,7 +810,6 @@ setupNodesAndTransistors()
 	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
 		nodes_pullup[i] = segdefs[i] == 1;
-//		nodes_pulldown[i] = !segdefs[i];
 		nodes_gatecount[i] = 0;
 		nodes_c1c2count[i] = 0;
 	}
