@@ -298,6 +298,40 @@ group_count()
 
 /************************************************************
  *
+ * Node State
+ *
+ ************************************************************/
+
+void recalcNodeList(const nodenum_t *source, count_t count);
+
+static inline void
+setNode(nodenum_t nn, BOOL state)
+{
+	set_nodes_pullup(nn, state);
+	set_nodes_pulldown(nn, !state);
+	recalcNodeList(&nn, 1);
+}
+
+static inline void
+setLow(nodenum_t nn)
+{
+	setNode(nn, 0);
+}
+
+static inline void
+setHigh(nodenum_t nn)
+{
+	setNode(nn, 1);
+}
+
+static inline BOOL
+isNodeHigh(nodenum_t nn)
+{
+	return get_nodes_state_value(nn);
+}
+
+/************************************************************
+ *
  * Node and Transistor Emulation
  *
  ************************************************************/
@@ -401,8 +435,6 @@ floatnode(nodenum_t nn)
 		set_nodes_state_floating(nn, 1);
 }
 
-static inline BOOL isNodeHigh(nodenum_t nn);
-
 void
 recalcTransistor(transnum_t tn)
 {
@@ -500,38 +532,6 @@ recalcAllNodes()
 	for (count_t i = 0; i < NODES; i++)
 		temp[i] = i;
 	recalcNodeList(temp, NODES);
-}
-
-/************************************************************
- *
- * Node State
- *
- ************************************************************/
-
-static inline void
-setNode(nodenum_t nn, BOOL state)
-{
-	set_nodes_pullup(nn, state);
-	set_nodes_pulldown(nn, !state);
-	recalcNodeList(&nn, 1);
-}
-
-void
-setLow(nodenum_t nn)
-{
-	setNode(nn, 0);
-}
-
-void
-setHigh(nodenum_t nn)
-{
-	setNode(nn, 1);
-}
-
-static inline BOOL
-isNodeHigh(nodenum_t nn)
-{
-	return get_nodes_state_value(nn);
 }
 
 /************************************************************
