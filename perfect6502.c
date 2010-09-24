@@ -62,13 +62,7 @@ typedef int BOOL;
  *
  ************************************************************/
 
-#define STATE_0 0
-#define STATE_1 1
-#define STATE_FLOATING 2
-#define STATE_0_FLOATING (STATE_0 | STATE_FLOATING)
-#define STATE_1_FLOATING (STATE_1 | STATE_FLOATING)
-
-#define isNodeHigh(nn) (nodes_state[nn] & 1)
+#define isNodeHigh(nn) (get_nodes_state_value(nn))
 
 /* the smallest types to fit the numbers */
 typedef uint16_t nodenum_t;
@@ -85,7 +79,8 @@ typedef uint8_t state_t;
 /* everything that describes a node */
 int nodes_pullup[NODES/sizeof(int)+1];
 int nodes_pulldown[NODES/sizeof(int)+1];
-state_t nodes_state[NODES];
+int nodes_state_value[NODES/sizeof(int)+1];
+int nodes_state_floating[NODES/sizeof(int)+1];
 nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
@@ -119,6 +114,36 @@ static inline BOOL
 get_nodes_pulldown(transnum_t t)
 {
 	return (nodes_pulldown[t>>5] >> (t & 31)) & 1;
+}
+
+static inline void
+set_nodes_state_value(transnum_t t, BOOL state)
+{
+	if (state)
+		nodes_state_value[t>>5] |= 1 << (t & 31);
+	else
+		nodes_state_value[t>>5] &= ~(1 << (t & 31));
+}
+
+static inline BOOL
+get_nodes_state_value(transnum_t t)
+{
+	return (nodes_state_value[t>>5] >> (t & 31)) & 1;
+}
+
+static inline void
+set_nodes_state_floating(transnum_t t, BOOL state)
+{
+	if (state)
+		nodes_state_floating[t>>5] |= 1 << (t & 31);
+	else
+		nodes_state_floating[t>>5] &= ~(1 << (t & 31));
+}
+
+static inline BOOL
+get_nodes_state_floating(transnum_t t)
+{
+	return (nodes_state_floating[t>>5] >> (t & 31)) & 1;
 }
 
 /************************************************************
@@ -311,36 +336,48 @@ addNodeToGroup(nodenum_t i)
 }
 
 /*
- * 1. if the group is connected to GND, it's STATE_0
- * 2. if the group is connected to VCC, it's STATE_1
- * 3a. if there is a pullup node, it's STATE_1
- * 3b. if there is a pulldown node, it's STATE_0
+ * 1. if the group is connected to GND, it's 0
+ * 2. if the group is connected to VCC, it's 1
+ * 3a. if there is a pullup node, it's 1
+ * 3b. if there is a pulldown node, it's 0
  * (if both 1 and 2 are true, the first pullup or pulldown wins, with
  * a statistical advantage towards STATE_1)
- * 4. otherwise, if there is an FH node, it's STATE_1_FLOATING
- * 5. otherwise, it's STATE_0_FLOATING (if there is an FL node, which is always the case)
+ * 4. otherwise, if there is an 1/floating node, it's 1/floating
+ * 5. otherwise, it's 0/floating (if there is a 0/floating node, which is always the case)
  */
-state_t
-getNodeValue()
+void
+getNodeValue(BOOL *value, BOOL *floating)
 {
-	if (group_contains(vss))
-		return STATE_0;
+	if (group_contains(vss)) {
+		*value = 0;
+		*floating = 0;
+		return;
+	}
 
-	if (group_contains(vcc))
-		return STATE_1;
+	if (group_contains(vcc)) {
+		*value = 1;
+		*floating = 0;
+		return;
+	}
 
-	state_t flstate = STATE_0_FLOATING;
+	*value = 0;
+	*floating = 1;
 
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		if (get_nodes_pullup(nn))
-			return STATE_1;
-		if (get_nodes_pulldown(nn))
-			return STATE_0;
-		if (nodes_state[nn] == STATE_1_FLOATING)
-			flstate = STATE_1_FLOATING;
+		if (get_nodes_pullup(nn)) {
+			*value = 1;
+			*floating = 0;
+			return;
+		}
+		if (get_nodes_pulldown(nn)) {
+			*value = 0;
+			*floating = 0;
+			return;
+		}
+		if (get_nodes_state_value(nn) && get_nodes_state_floating(nn))
+			*value = 1;
 	}
-	return flstate;
 }
 
 void
@@ -363,7 +400,7 @@ floatnode(nodenum_t nn)
 {
 	/* VCC and GND are constant */
 	if (nn != vss && nn != vcc)
-		nodes_state[nn] |= STATE_FLOATING;
+		set_nodes_state_floating(nn, 1);
 }
 
 void
@@ -404,8 +441,8 @@ recalcNode(nodenum_t node)
 	addNodeToGroup(node);
 
 	/* get the state of the group */
-	state_t newv = getNodeValue();
-
+	BOOL newv_value, newv_floating;
+	getNodeValue(&newv_value, &newv_floating);
 	/*
 	 * now all nodes in this group are in this state,
 	 * - all transistors switched by nodes the group
@@ -415,7 +452,8 @@ recalcNode(nodenum_t node)
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		nodes_state[nn] = newv;
+		set_nodes_state_value(nn, newv_value);
+		set_nodes_state_floating(nn, newv_floating);
 		for (count_t t = 0; t < nodes_gatecount[nn]; t++)
 			recalcTransistor(nodes_gates[nn][t]);
 	}
@@ -844,16 +882,20 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
-	nodes_state[vss] = STATE_0;
-	nodes_state[vcc] = STATE_1;
+	set_nodes_state_value(vss, 0);
+	set_nodes_state_floating(vss, 0);
+	set_nodes_state_value(vcc, 1);
+	set_nodes_state_floating(vcc, 0);
 }
 
 void
 initChip()
 {
 	/* all nodes are floating */
-	for (nodenum_t nn = 0; nn < NODES; nn++)
-		nodes_state[nn] = STATE_0_FLOATING;
+	for (nodenum_t nn = 0; nn < NODES; nn++) {
+		set_nodes_state_value(nn, 0);
+		set_nodes_state_floating(nn, 1);
+	}
 	/* all transistors are off */
 	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
 		set_transistors_on(tn, NO);
