@@ -434,8 +434,10 @@ recalcNode(nodenum_t node)
  * at least be able to hold NODES elements!
  */
 void
-recalcNodeList()
+recalcNodeList(const nodenum_t *source, count_t count)
 {
+	listin_fill(source, count);
+
 	for (int j = 0; j < 100; j++) {	/* loop limiter */
 		if (!listin_count())
 			return;
@@ -467,8 +469,7 @@ recalcAllNodes()
 	nodenum_t temp[NODES];
 	for (count_t i = 0; i < NODES; i++)
 		temp[i] = i;
-	listin_fill(temp, NODES);
-	recalcNodeList();
+	recalcNodeList(temp, NODES);
 }
 
 static inline void
@@ -476,8 +477,7 @@ setNode(nodenum_t nn, BOOL state)
 {
 	set_nodes_pullup(nn, state);
 	set_nodes_pulldown(nn, !state);
-	listin_fill(&nn, 1);
-	recalcNodeList();
+	recalcNodeList(&nn, 1);
 }
 
 void
@@ -504,18 +504,16 @@ uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
 const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
 
 void
-writeDataBus(uint8_t x)
+writeDataBus(uint8_t d)
 {
 	for (int i = 0; i < 8; i++) {
 		nodenum_t nn = dbnodes[i];
-		set_nodes_pulldown(nn, !(x & 1));
-		set_nodes_pullup(nn, x & 1);
-		x >>= 1;
+		setNode(nn, d & 1);
+		d >>= 1;
 	}
 
 	/* recalc all nodes connected starting from the data bus */
-	listin_fill(dbnodes, 8);
-	recalcNodeList();
+	recalcNodeList(dbnodes, 8);
 }
 
 uint8_t mRead(uint16_t a)
