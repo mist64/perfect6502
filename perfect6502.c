@@ -1,4 +1,3 @@
-//#define DEBUG
 int verbose = 0;
 
 #include <stdio.h>
@@ -59,11 +58,6 @@ int cycle;
 
 uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
 
-/* a group of connected nodes with the same potential */
-nodenum_t group[NODES];
-count_t groupcount;
-int groupbitmap[NODES/sizeof(int)+1];
-
 /* list of nodes that need to be recalculated */
 typedef struct {
 	nodenum_t *list;
@@ -95,15 +89,58 @@ get_transistors_on(transnum_t t)
 }
 
 BOOL
-groupContains(nodenum_t el)
+recalcListContains(nodenum_t el)
+{
+	return (recalc.bitmap[el>>5] >> (el & 31)) & 1;
+}
+
+/************************************************************
+ *
+ * Data Structures and Algorithms for Groups of Nodes
+ *
+ ************************************************************/
+
+/*
+ * a group is a set of connected nodes
+ * that consequently share the same potential
+ *
+ * we use an array and a count for O(1) insert and
+ * iteration, and a redundant bitmap for O(1) lookup
+ */
+static nodenum_t group[NODES];
+static count_t groupcount;
+static int groupbitmap[NODES/sizeof(int)+1];
+
+static inline void
+group_init()
+{
+	groupcount = 0;
+	bzero(groupbitmap, sizeof(groupbitmap));
+}
+
+static inline void
+group_add(nodenum_t i)
+{
+	group[groupcount++] = i;
+	groupbitmap[i>>5] |= 1 << (i & 31);
+}
+
+static inline nodenum_t
+group_get(count_t n)
+{
+	return group[n];
+}
+
+static inline BOOL
+group_contains(nodenum_t el)
 {
 	return (groupbitmap[el>>5] >> (el & 31)) & 1;
 }
 
-BOOL
-recalcListContains(nodenum_t el)
+static inline count_t
+group_count()
 {
-	return (recalc.bitmap[el>>5] >> (el & 31)) & 1;
+	return groupcount;
 }
 
 /************************************************************
@@ -131,11 +168,10 @@ addNodeTransistor(nodenum_t node, transnum_t t)
 void
 addNodeToGroup(nodenum_t i)
 {
-	if (groupContains(i))
+	if (group_contains(i))
 		return;
 
-	group[groupcount++] = i;
-	groupbitmap[i>>5] |= 1 << (i & 31);
+	group_add(i);
 
 	if (i == vss || i == vcc)
 		return;
@@ -147,22 +183,22 @@ addNodeToGroup(nodenum_t i)
 // 1. if there is a pullup node, it's STATE_PU
 // 2. if there is a pulldown node, it's STATE_PD
 // (if both 1 and 2 are true, the first pullup or pulldown wins, with
-// a statistical advantage towards STATE_PU
+// a statistical advantage towards STATE_PU)
 // 3. otherwise, if there is an FH node, it's STATE_FH
 // 4. otherwise, it's STATE_FL (if there is an FL node, which is always the case)
 state_t
 getNodeValue()
 {
-	if (groupContains(vss))
+	if (group_contains(vss))
 		return STATE_GND;
 
-	if (groupContains(vcc))
+	if (group_contains(vcc))
 		return STATE_VCC;
 
 	state_t flstate = STATE_FL;
 
-	for (count_t i = 0; i < groupcount; i++) {
-		nodenum_t nn = group[i];
+	for (count_t i = 0; i < group_count(); i++) {
+		nodenum_t nn = group_get(i);
 		if (nodes_pullup[nn])
 			return STATE_PU;
 		if (nodes_pulldown[nn])
@@ -234,8 +270,8 @@ recalcNode(nodenum_t node)
 	if (node == vss || node == vcc)
 		return;
 
-	groupcount = 0;
-	bzero(groupbitmap, sizeof(groupbitmap));
+	group_init();
+
 	/*
 	 * get all nodes that are connected through
 	 * transistors, starting with this one
@@ -252,10 +288,11 @@ recalcNode(nodenum_t node)
 	 * - all nodes behind the transistor are collected
 	 *   and must be looked at in the next run
 	 */
-	for (count_t i = 0; i < groupcount; i++) {
-		nodes_state[group[i]] = newv;
-		for (count_t t = 0; t < nodes_gatecount[group[i]]; t++)
-			recalcTransistor(nodes_gates[group[i]][t]);
+	for (count_t i = 0; i < group_count(); i++) {
+		nodenum_t nn = group_get(i);
+		nodes_state[nn] = newv;
+		for (count_t t = 0; t < nodes_gatecount[nn]; t++)
+			recalcTransistor(nodes_gates[nn][t]);
 	}
 }
 
@@ -671,6 +708,16 @@ step()
 	if (verbose)
 		chipStatus();
 
+#if 0
+	for (int i = 0; i < NODES; i++) {
+//		if (nodes_pullup[i] && nodes_pulldown[i])
+//			printf("BOTH %d\n", i);
+		if (!nodes_pullup[i] && !nodes_pulldown[i])
+			printf("%d ", i);
+	}
+	printf("\n");
+#endif
+
 	handle_monitor();
 }
 
@@ -685,7 +732,8 @@ setupNodesAndTransistors()
 {
 	count_t i;
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
-		nodes_pullup[i] = segdefs[i];
+		nodes_pullup[i] = segdefs[i] == 1;
+//		nodes_pulldown[i] = !segdefs[i];
 		nodes_gatecount[i] = 0;
 		nodes_c1c2count[i] = 0;
 	}
