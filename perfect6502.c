@@ -70,15 +70,38 @@ typedef uint8_t state_t;
 
 /************************************************************
  *
+ * Bitmap Data Structures and Algorithms
+ *
+ ************************************************************/
+
+typedef unsigned int bitmap_t;
+
+static inline void
+set_bitmap(bitmap_t *bitmap, int index, BOOL state)
+{
+	if (state)
+		bitmap[index>>5] |= 1 << (index & 31);
+	else
+		bitmap[index>>5] &= ~(1 << (index & 31));
+}
+
+static inline BOOL
+get_bitmap(bitmap_t *bitmap, int index)
+{
+	return (bitmap[index>>5] >> (index & 31)) & 1;
+}
+
+/************************************************************
+ *
  * Data Structures for Nodes
  *
  ************************************************************/
 
 /* everything that describes a node */
-int nodes_pullup[NODES/sizeof(int)+1];
-int nodes_pulldown[NODES/sizeof(int)+1];
-int nodes_state_value[NODES/sizeof(int)+1];
-int nodes_state_floating[NODES/sizeof(int)+1];
+bitmap_t nodes_pullup[NODES/sizeof(bitmap_t)+1];
+bitmap_t nodes_pulldown[NODES/sizeof(bitmap_t)+1];
+bitmap_t nodes_state_value[NODES/sizeof(bitmap_t)+1];
+bitmap_t nodes_state_floating[NODES/sizeof(bitmap_t)+1];
 nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
@@ -87,61 +110,49 @@ count_t nodes_c1c2count[NODES];
 static inline void
 set_nodes_pullup(transnum_t t, BOOL state)
 {
-	if (state)
-		nodes_pullup[t>>5] |= 1 << (t & 31);
-	else
-		nodes_pullup[t>>5] &= ~(1 << (t & 31));
+	set_bitmap(nodes_pullup, t, state);
 }
 
 static inline BOOL
 get_nodes_pullup(transnum_t t)
 {
-	return (nodes_pullup[t>>5] >> (t & 31)) & 1;
+	return get_bitmap(nodes_pullup, t);
 }
 
 static inline void
 set_nodes_pulldown(transnum_t t, BOOL state)
 {
-	if (state)
-		nodes_pulldown[t>>5] |= 1 << (t & 31);
-	else
-		nodes_pulldown[t>>5] &= ~(1 << (t & 31));
+	set_bitmap(nodes_pulldown, t, state);
 }
 
 static inline BOOL
 get_nodes_pulldown(transnum_t t)
 {
-	return (nodes_pulldown[t>>5] >> (t & 31)) & 1;
+	return get_bitmap(nodes_pulldown, t);
 }
 
 static inline void
 set_nodes_state_value(transnum_t t, BOOL state)
 {
-	if (state)
-		nodes_state_value[t>>5] |= 1 << (t & 31);
-	else
-		nodes_state_value[t>>5] &= ~(1 << (t & 31));
+	set_bitmap(nodes_state_value, t, state);
 }
 
 static inline BOOL
 get_nodes_state_value(transnum_t t)
 {
-	return (nodes_state_value[t>>5] >> (t & 31)) & 1;
+	return get_bitmap(nodes_state_value, t);
 }
 
 static inline void
 set_nodes_state_floating(transnum_t t, BOOL state)
 {
-	if (state)
-		nodes_state_floating[t>>5] |= 1 << (t & 31);
-	else
-		nodes_state_floating[t>>5] &= ~(1 << (t & 31));
+	set_bitmap(nodes_state_floating, t, state);
 }
 
 static inline BOOL
 get_nodes_state_floating(transnum_t t)
 {
-	return (nodes_state_floating[t>>5] >> (t & 31)) & 1;
+	return get_bitmap(nodes_state_floating, t);
 }
 
 /************************************************************
@@ -154,21 +165,18 @@ get_nodes_state_floating(transnum_t t)
 nodenum_t transistors_gate[TRANSISTORS];
 nodenum_t transistors_c1[TRANSISTORS];
 nodenum_t transistors_c2[TRANSISTORS];
-int transistors_on[TRANSISTORS/sizeof(int)+1];
+bitmap_t transistors_on[TRANSISTORS/sizeof(bitmap_t)+1];
 
 static inline void
 set_transistors_on(transnum_t t, BOOL state)
 {
-	if (state)
-		transistors_on[t>>5] |= 1 << (t & 31);
-	else
-		transistors_on[t>>5] &= ~(1 << (t & 31));
+	set_bitmap(transistors_on, t, state);
 }
 
 static inline BOOL
 get_transistors_on(transnum_t t)
 {
-	return (transistors_on[t>>5] >> (t & 31)) & 1;
+	return get_bitmap(transistors_on, t);
 }
 
 /************************************************************
@@ -181,12 +189,12 @@ get_transistors_on(transnum_t t)
 typedef struct {
 	nodenum_t *list;
 	count_t count;
-	int *bitmap;
+	bitmap_t *bitmap;
 } list_t;
 
 /* the nodes we are working with */
 nodenum_t list1[NODES];
-int bitmap1[NODES/sizeof(int)+1];
+bitmap_t bitmap1[NODES/sizeof(bitmap_t)+1];
 list_t listin = {
 	.list = list1,
 	.bitmap = bitmap1
@@ -194,7 +202,7 @@ list_t listin = {
 
 /* the nodes we are collecting for the next run */
 nodenum_t list2[NODES];
-int bitmap2[NODES/sizeof(int)+1];
+bitmap_t bitmap2[NODES/sizeof(bitmap_t)+1];
 list_t listout = {
 	.list = list2,
 	.bitmap = bitmap2
@@ -230,7 +238,7 @@ lists_switch()
 static inline void
 listout_clear()
 {
-	bzero(listout.bitmap, sizeof(*listout.bitmap)*NODES/sizeof(int));
+	bzero(listout.bitmap, sizeof(*listout.bitmap)*NODES/sizeof(bitmap_t));
 	listout.count = 0;
 }
 
@@ -262,7 +270,7 @@ listout_contains(nodenum_t el)
  */
 static nodenum_t group[NODES];
 static count_t groupcount;
-static int groupbitmap[NODES/sizeof(int)+1];
+static bitmap_t groupbitmap[NODES/sizeof(bitmap_t)+1];
 
 static inline void
 group_clear()
