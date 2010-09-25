@@ -1048,8 +1048,8 @@ main()
 
 #define MAGIC_8 0xEA
 #define MAGIC_16 0xAB1E
-#define MAGIC_INDX 0x1328
-#define MAGIC_INDY 0x1979
+#define MAGIC_IZX 0x1328
+#define MAGIC_IZY 0x1979
 #define X_OFFSET 5
 #define Y_OFFSET 10
 
@@ -1067,8 +1067,8 @@ struct {
 	BOOL absx;
 	BOOL zpy;
 	BOOL absy;
-	BOOL indx;
-	BOOL indy;
+	BOOL izx;
+	BOOL izy;
 	BOOL reads;
 	BOOL writes;
 } data[256];
@@ -1085,7 +1085,7 @@ setup_memory(uint8_t opcode)
 	uint16_t addr = SETUP_ADDR;
 	memory[addr++] = 0xA2; /* LDA #S */
 	initial_s = addr;
-	memory[addr++] = 0xFF;
+	memory[addr++] = 0x7F;
 	memory[addr++] = 0x9A; /* TXS    */
 	memory[addr++] = 0xA9; /* LDA #P */
 	initial_p = addr;
@@ -1126,7 +1126,7 @@ main()
 	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
 //	for (int opcode = 0xB1; opcode <= 0xB1; opcode++) {
-		printf("testing opcode: $%02X: ", opcode);
+		printf("$%02X: ", opcode);
 
 		/**************************************************
 		 * find out length of instruction in bytes
@@ -1165,10 +1165,10 @@ main()
 			setup_memory(opcode);
 			memory[initial_x] = X_OFFSET;
 			memory[initial_y] = Y_OFFSET;
-			memory[MAGIC_8 + X_OFFSET + 0] = MAGIC_INDX & 0xFF;
-			memory[MAGIC_8 + X_OFFSET + 1] = MAGIC_INDX >> 8;
-			memory[MAGIC_8 + 0] = MAGIC_INDY & 0xFF;
-			memory[MAGIC_8 + 1] = MAGIC_INDY >> 8;
+			memory[MAGIC_8 + X_OFFSET + 0] = MAGIC_IZX & 0xFF;
+			memory[MAGIC_8 + X_OFFSET + 1] = MAGIC_IZX >> 8;
+			memory[MAGIC_8 + 0] = MAGIC_IZY & 0xFF;
+			memory[MAGIC_8 + 1] = MAGIC_IZY >> 8;
 			initChip();
 			if (data[opcode].length == 2) {
 				memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
@@ -1183,8 +1183,8 @@ main()
 			data[opcode].absx = NO;
 			data[opcode].zpy = NO;
 			data[opcode].absy = NO;
-			data[opcode].indx = NO;
-			data[opcode].indy = NO;
+			data[opcode].izx = NO;
+			data[opcode].izy = NO;
 
 			data[opcode].reads = NO;
 			data[opcode].writes = NO;
@@ -1206,10 +1206,10 @@ main()
 						data[opcode].zpy = YES;
 					else if (readAddressBus() == MAGIC_16 + Y_OFFSET)
 						data[opcode].absy = YES;
-					else if (readAddressBus() == MAGIC_INDX)
-						data[opcode].indx = YES;
-					else if (readAddressBus() == MAGIC_INDY + Y_OFFSET)
-						data[opcode].indy = YES;
+					else if (readAddressBus() == MAGIC_IZX)
+						data[opcode].izx = YES;
+					else if (readAddressBus() == MAGIC_IZY + Y_OFFSET)
+						data[opcode].izy = YES;
 					else
 						is_data_access = NO;
 					if (is_data_access)
@@ -1230,16 +1230,44 @@ main()
 			else
 				printf("%d ", data[opcode].length);
 			printf("cycles: %d ", data[opcode].cycles);
+#if 0
 			printf("zp: %d ", data[opcode].zp);
 			printf("abs: %d ", data[opcode].abs);
 			printf("zpx: %d ", data[opcode].zpx);
 			printf("absx: %d ", data[opcode].absx);
 			printf("zpy: %d ", data[opcode].zpy);
 			printf("absy: %d ", data[opcode].absy);
-			printf("indx: %d ", data[opcode].indx);
-			printf("indy: %d ", data[opcode].indy);
+			printf("izx: %d ", data[opcode].izx);
+			printf("izy: %d ", data[opcode].izy);
 			printf("r: %d ", data[opcode].reads);
 			printf("w: %d ", data[opcode].writes);
+#else
+			if (data[opcode].izy) {
+				printf("izy ");
+			} else if (data[opcode].izx) {
+				printf("izx ");
+			} else if (data[opcode].zpy) {
+				printf("zpy ");
+			} else if (data[opcode].zpx) {
+				printf("zpx ");
+			} else if (data[opcode].zp) {
+				printf("zp ");
+			} else if (data[opcode].absy) {
+				printf("absy ");
+			} else if (data[opcode].absx) {
+				printf("absx ");
+			} else if (data[opcode].abs) {
+				printf("abs ");
+			}
+
+
+			if (data[opcode].reads) {
+				printf("r");
+			}
+			if (data[opcode].writes) {
+				printf("w ");
+			}
+#endif
 			printf("\n");
 		}
 	}
