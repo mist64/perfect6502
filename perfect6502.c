@@ -460,14 +460,14 @@ floatnode(nodenum_t nn)
 }
 
 void
-recalcTransistor(transnum_t tn)
+toggleTransistor(transnum_t tn)
 {
 	/* if the gate is high, the transistor should be on */
+#if 0 /* safer version: set it to what the gate says */
 	BOOL on = isNodeHigh(transistors_gate[tn]);
-
-	/* no change? nothing to do! */
-	if (on == get_transistors_on(tn))
-		return;
+#else /* easier version: toggle it */
+	BOOL on = !get_transistors_on(tn);
+#endif
 
 	set_transistors_on(tn, on);
 
@@ -513,7 +513,7 @@ recalcNode(nodenum_t node)
 		set_nodes_state_floating(nn, newv_floating);
 		if (needs_recalc)
 			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
-				recalcTransistor(nodes_gates[nn][t]);
+				toggleTransistor(nodes_gates[nn][t]);
 	}
 }
 
