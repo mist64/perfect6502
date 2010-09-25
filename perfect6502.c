@@ -910,12 +910,9 @@ setupNodesAndTransistors()
 	}
 	/* copy transistors into r/w data structure */
 	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
-		nodenum_t gate = transdefs[i].gate;
-		nodenum_t c1 = transdefs[i].c1;
-		nodenum_t c2 = transdefs[i].c2;
-		transistors_gate[i] = gate;
-		transistors_c1[i] = c1;
-		transistors_c2[i] = c2;
+		transistors_gate[i] = transdefs[i].gate;
+		transistors_c1[i] = transdefs[i].c1;
+		transistors_c2[i] = transdefs[i].c2;
 	}
 #if 0
 	int j = i;
