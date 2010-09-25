@@ -508,10 +508,12 @@ recalcNode(nodenum_t node)
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
+		BOOL needs_recalc = get_nodes_state_value(nn) != newv_value;
 		set_nodes_state_value(nn, newv_value);
 		set_nodes_state_floating(nn, newv_floating);
-		for (count_t t = 0; t < nodes_gatecount[nn]; t++)
-			recalcTransistor(nodes_gates[nn][t]);
+		if (needs_recalc)
+			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
+				recalcTransistor(nodes_gates[nn][t]);
 	}
 }
 
