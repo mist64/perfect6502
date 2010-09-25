@@ -246,13 +246,13 @@ static inline void
 listout_add(nodenum_t i)
 {
 	listout.list[listout.count++] = i;
-	listout.bitmap[i>>5] |= 1 << (i & 31);
+	set_bitmap(listout.bitmap, i, 1);
 }
 
 static inline BOOL
 listout_contains(nodenum_t el)
 {
-	return (listout.bitmap[el>>5] >> (el & 31)) & 1;
+	return get_bitmap(listout.bitmap, el);
 }
 
 /************************************************************
@@ -283,7 +283,7 @@ static inline void
 group_add(nodenum_t i)
 {
 	group[groupcount++] = i;
-	groupbitmap[i>>5] |= 1 << (i & 31);
+	set_bitmap(groupbitmap, i, 1);
 }
 
 static inline nodenum_t
@@ -295,7 +295,7 @@ group_get(count_t n)
 static inline BOOL
 group_contains(nodenum_t el)
 {
-	return (groupbitmap[el>>5] >> (el & 31)) & 1;
+	return get_bitmap(groupbitmap, el);
 }
 
 static inline count_t
