@@ -911,26 +911,31 @@ setupNodesAndTransistors()
 		nodes_c1c2count[i] = 0;
 	}
 	/* copy transistors into r/w data structure */
+	count_t j = 0;
 	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
-		transistors_gate[i] = transdefs[i].gate;
-		transistors_c1[i] = transdefs[i].c1;
-		transistors_c2[i] = transdefs[i].c2;
-	}
-#if 0
-	int j = i;
-	/* add transistors for all pins of the package */
-	for (i = j; i < j + sizeof(transdefs_pins)/sizeof(*transdefs_pins); i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
-		transistors_gate[i] = gate;
-		transistors_c1[i] = c1;
-		transistors_c2[i] = c2;
-		nodes_gates[gate][nodes_gatecount[gate]++] = i;
-		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
-		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
+		/* skip duplicate transistors */
+		BOOL found = NO;
+		for (count_t k = 0; k < i; k++) {
+			if (transdefs[k].gate == gate && 
+			    transdefs[k].c1 == c1 && 
+			    transdefs[k].c2 == c2) {
+				found = YES;
+				break; 
+			}
+		}
+		if (!found) {
+			transistors_gate[j] = gate;
+			transistors_c1[j] = c1;
+			transistors_c2[j] = c2;
+			j++;
+		}
 	}
-#endif
+	if (verbose)
+		printf("unique transistors: %d\n", j);
+
 	/* cross reference transistors in nodes data structures */
 	for (i = 0; i < TRANSISTORS; i++) {
 		nodenum_t gate = transistors_gate[i];
