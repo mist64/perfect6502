@@ -1007,7 +1007,7 @@ initChip()
 	setHigh(res);
 
 #ifdef TEST
-	for (int i = 0; i < 63; i++)
+	for (int i = 0; i < 62; i++)
 		step_quiet();
 
 	cycle = -1;
@@ -1048,6 +1048,10 @@ main()
 
 #define MAGIC_8 0xEA
 #define MAGIC_16 0xAB1E
+#define MAGIC_INDX 0x1328
+#define MAGIC_INDY 0x1979
+#define X_OFFSET 5
+#define Y_OFFSET 10
 
 #define IS_READ_CYCLE (isNodeHigh(clk0) && isNodeHigh(rw))
 #define IS_WRITE_CYCLE (isNodeHigh(clk0) && !isNodeHigh(rw))
@@ -1057,7 +1061,59 @@ struct {
 	BOOL crash;
 	int length;
 	int cycles;
+	BOOL zp;
+	BOOL abs;
+	BOOL zpx;
+	BOOL absx;
+	BOOL zpy;
+	BOOL absy;
+	BOOL indx;
+	BOOL indy;
+	BOOL reads;
+	BOOL writes;
 } data[256];
+
+uint16_t initial_s, initial_p, initial_a, initial_x, initial_y;
+
+void
+setup_memory(uint8_t opcode)
+{
+	bzero(memory, 65536);
+
+	memory[0xFFFC] = SETUP_ADDR & 0xFF;
+	memory[0xFFFD] = SETUP_ADDR >> 8;
+	uint16_t addr = SETUP_ADDR;
+	memory[addr++] = 0xA2; /* LDA #S */
+	initial_s = addr;
+	memory[addr++] = 0xFF;
+	memory[addr++] = 0x9A; /* TXS    */
+	memory[addr++] = 0xA9; /* LDA #P */
+	initial_p = addr;
+	memory[addr++] = 0;
+	memory[addr++] = 0x48; /* PHA    */
+	memory[addr++] = 0xA9; /* LHA #A */
+	initial_a = addr;
+	memory[addr++] = 0;
+	memory[addr++] = 0xA2; /* LDX #X */
+	initial_x = addr;
+	memory[addr++] = 0;
+	memory[addr++] = 0xA0; /* LDY #Y */
+	initial_y = addr;
+	memory[addr++] = 0;
+	memory[addr++] = 0x28; /* PLP    */
+	memory[addr++] = 0x4C; /* JMP    */
+	memory[addr++] = INSTRUCTION_ADDR & 0xFF;
+	memory[addr++] = INSTRUCTION_ADDR >> 8;
+
+	memory[INSTRUCTION_ADDR + 0] = opcode;
+	memory[INSTRUCTION_ADDR + 1] = 0;
+	memory[INSTRUCTION_ADDR + 2] = 0;
+	memory[INSTRUCTION_ADDR + 3] = 0;
+
+	memory[0xFFFE] = BRK_VECTOR & 0xFF;
+	memory[0xFFFF] = BRK_VECTOR >> 8;
+	memory[BRK_VECTOR] = 0x00; /* loop there */
+}
 
 int
 main()
@@ -1069,42 +1125,14 @@ main()
 
 	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
+//	for (int opcode = 0xB1; opcode <= 0xB1; opcode++) {
 		printf("testing opcode: $%02X: ", opcode);
-
-		memory[0xFFFC] = SETUP_ADDR & 0xFF;
-		memory[0xFFFD] = SETUP_ADDR >> 8;
-		uint16_t addr = SETUP_ADDR;
-		memory[addr++] = 0xA2; /* LDA #S */
-		memory[addr++] = 0x9A; /* TXS */
-		memory[addr++] = 0x48; /* PHA    */
-		memory[addr++] = 0xA9; /* LDA #P */
-		memory[addr++] = 0;
-		memory[addr++] = 0x48; /* PHA    */
-		memory[addr++] = 0xA9; /* LHA #A */
-		memory[addr++] = 0;
-		memory[addr++] = 0xA2; /* LDX #X */
-		memory[addr++] = 0;
-		memory[addr++] = 0xA0; /* LDY #Y */
-		memory[addr++] = 0;
-		memory[addr++] = 0x28; /* PLP    */
-		memory[addr++] = 0x4C; /* JMP    */
-		memory[addr++] = INSTRUCTION_ADDR & 0xFF;
-		memory[addr++] = INSTRUCTION_ADDR >> 8;
-
-		memory[INSTRUCTION_ADDR + 0] = opcode;
-		memory[INSTRUCTION_ADDR + 1] = 0;
-		memory[INSTRUCTION_ADDR + 2] = 0;
-		memory[INSTRUCTION_ADDR + 3] = 0;
-
-		memory[0xFFFE] = BRK_VECTOR & 0xFF;
-		memory[0xFFFF] = BRK_VECTOR >> 8;
-		memory[BRK_VECTOR] = 0x00; /* loop there */
-
-		initChip();
 
 		/**************************************************
 		 * find out length of instruction in bytes
 		 **************************************************/
+		setup_memory(opcode);
+		initChip();
 		int i;
 		for (i = 0; i < MAX_CYCLES; i++) {
 			step();
@@ -1122,6 +1150,7 @@ main()
 			/**************************************************
 			 * find out length of instruction in cycles
 			 **************************************************/
+			setup_memory(opcode);
 			initChip();
 			for (i = 0; i < MAX_CYCLES; i++) {
 				step();
@@ -1131,8 +1160,15 @@ main()
 			data[opcode].cycles = (cycle - 1) / 2;
 
 			/**************************************************
-			 * find out reads
+			 * find out zp or abs reads
 			 **************************************************/
+			setup_memory(opcode);
+			memory[initial_x] = X_OFFSET;
+			memory[initial_y] = Y_OFFSET;
+			memory[MAGIC_8 + X_OFFSET + 0] = MAGIC_INDX & 0xFF;
+			memory[MAGIC_8 + X_OFFSET + 1] = MAGIC_INDX >> 8;
+			memory[MAGIC_8 + 0] = MAGIC_INDY & 0xFF;
+			memory[MAGIC_8 + 1] = MAGIC_INDY >> 8;
 			initChip();
 			if (data[opcode].length == 2) {
 				memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
@@ -1141,19 +1177,70 @@ main()
 				memory[INSTRUCTION_ADDR + 2] = MAGIC_16 >> 8;
 			}
 
+			data[opcode].zp = NO;
+			data[opcode].abs = NO;
+			data[opcode].zpx = NO;
+			data[opcode].absx = NO;
+			data[opcode].zpy = NO;
+			data[opcode].absy = NO;
+			data[opcode].indx = NO;
+			data[opcode].indy = NO;
+
+			data[opcode].reads = NO;
+			data[opcode].writes = NO;
+
 			for (i = 0; i < data[opcode].cycles * 2; i++) {
 				step();
-				if (IS_READ_CYCLE) {
-//					printf("read: %04X\n", readAddressBus());
+				if (IS_READ_CYCLE || IS_WRITE_CYCLE) {
+//printf("RW@ %X\n", readAddressBus());
+					BOOL is_data_access = YES;
+					if (readAddressBus() == MAGIC_8)
+						data[opcode].zp = YES;
+					else if (readAddressBus() == MAGIC_16)
+						data[opcode].abs = YES;
+					else if (readAddressBus() == MAGIC_8 + X_OFFSET)
+						data[opcode].zpx = YES;
+					else if (readAddressBus() == MAGIC_16 + X_OFFSET)
+						data[opcode].absx = YES;
+					else if (readAddressBus() == MAGIC_8 + Y_OFFSET)
+						data[opcode].zpy = YES;
+					else if (readAddressBus() == MAGIC_16 + Y_OFFSET)
+						data[opcode].absy = YES;
+					else if (readAddressBus() == MAGIC_INDX)
+						data[opcode].indx = YES;
+					else if (readAddressBus() == MAGIC_INDY + Y_OFFSET)
+						data[opcode].indy = YES;
+					else
+						is_data_access = NO;
+					if (is_data_access)
+						if (IS_READ_CYCLE)
+							data[opcode].reads = YES;
+						if (IS_WRITE_CYCLE)
+							data[opcode].writes = YES;
 				}
 			};
-//			data[opcode].cycles = (cycle - 2) / 2;
+
 		}
 		if (data[opcode].crash) {
 			printf("CRASH\n");
 		} else {
-			printf("bytes: %d ", data[opcode].length);
-			printf("cycles: %d\n", data[opcode].cycles);
+			printf("bytes: ");
+			if (data[opcode].length < 0 || data[opcode].length > 9)
+				printf("X ");
+			else
+				printf("%d ", data[opcode].length);
+			printf("cycles: %d ", data[opcode].cycles);
+			printf("zp: %d ", data[opcode].zp);
+			printf("abs: %d ", data[opcode].abs);
+			printf("zpx: %d ", data[opcode].zpx);
+			printf("absx: %d ", data[opcode].absx);
+			printf("zpy: %d ", data[opcode].zpy);
+			printf("absy: %d ", data[opcode].absy);
+			printf("indx: %d ", data[opcode].indx);
+			printf("indy: %d ", data[opcode].indy);
+			printf("r: %d ", data[opcode].reads);
+			printf("w: %d ", data[opcode].writes);
+			printf("\n");
 		}
 	}
 }
