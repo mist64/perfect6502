@@ -902,12 +902,25 @@ void
 setupNodesAndTransistors()
 {
 	count_t i;
+	/* copy nodes into r/w data structure */
 	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
 		set_nodes_pullup(i, segdefs[i] == 1);
 		nodes_gatecount[i] = 0;
 		nodes_c1c2count[i] = 0;
 	}
+	/* copy transistors into r/w data structure */
 	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
+		nodenum_t gate = transdefs[i].gate;
+		nodenum_t c1 = transdefs[i].c1;
+		nodenum_t c2 = transdefs[i].c2;
+		transistors_gate[i] = gate;
+		transistors_c1[i] = c1;
+		transistors_c2[i] = c2;
+	}
+#if 0
+	int j = i;
+	/* add transistors for all pins of the package */
+	for (i = j; i < j + sizeof(transdefs_pins)/sizeof(*transdefs_pins); i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
@@ -918,6 +931,17 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
+#endif
+	/* cross reference transistors in nodes data structures */
+	for (i = 0; i < TRANSISTORS; i++) {
+		nodenum_t gate = transistors_gate[i];
+		nodenum_t c1 = transistors_c1[i];
+		nodenum_t c2 = transistors_c2[i];
+		nodes_gates[gate][nodes_gatecount[gate]++] = i;
+		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
+		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
+	}
+
 	set_nodes_state_value(vss, 0);
 	set_nodes_state_floating(vss, 0);
 	set_nodes_state_value(vcc, 1);
