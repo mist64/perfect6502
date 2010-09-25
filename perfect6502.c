@@ -20,7 +20,9 @@
  THE SOFTWARE.
 */
 
-int verbose = 0;
+int verbose = 1;
+
+#define TEST
 
 /************************************************************
  *
@@ -521,14 +523,16 @@ recalcNode(nodenum_t node)
  * NOTE: "list" as provided by the caller must
  * at least be able to hold NODES elements!
  */
+//int highest = 0;
 void
 recalcNodeList(const nodenum_t *source, count_t count)
 {
 	listin_fill(source, count);
 
-	for (int j = 0; j < 100; j++) {	/* loop limiter */
+	int j;
+	for (j = 0; j < 100; j++) {	/* loop limiter */
 		if (!listin_count())
-			return;
+			break;
 
 		listout_clear();
 
@@ -549,6 +553,10 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 */
 		lists_switch();
 	}
+//	if (j > highest) {
+//		highest = j;
+//		printf("%d\n", highest);
+//	}
 }
 
 void
@@ -586,8 +594,6 @@ writeDataBus(uint8_t d)
 
 uint8_t mRead(uint16_t a)
 {
-	if (verbose)
-		printf("PEEK($%04X) = $%02X\n", a, memory[a]);
 	return memory[a];
 }
 
@@ -628,8 +634,6 @@ readDataBus()
 void
 mWrite(uint16_t a, uint8_t d)
 {
-	if (verbose)
-		printf("POKE $%04X, $%02X\n", a, d);
 	memory[a] = d;
 }
 
@@ -754,7 +758,7 @@ static int cycle;
 void
 chipStatus()
 {
-	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X\n",
+	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X",
 			cycle,
 			isNodeHigh(clk0),
 			readAddressBus(),
@@ -767,6 +771,16 @@ chipStatus()
 			readSP(),
 			readP(),
 			readNOTIR() ^ 0xFF);
+
+	BOOL clk = isNodeHigh(clk0);
+	uint16_t a = readAddressBus();
+	uint8_t d = readDataBus();
+	if (clk && isNodeHigh(rw))
+		printf(" R$%04X=$%02X\n", a, memory[a]);
+	else if (clk && !isNodeHigh(rw))
+		printf(" W$%04X=$%02X\n", a, d);
+	else
+		printf("\n");
 }
 
 /************************************************************
@@ -884,14 +898,24 @@ halfStep()
 }
 
 void
-step()
+step_quiet()
 {
 	halfStep();
 	cycle++;
+//	if (!(cycle % 1000))
+//		printf("%d\n", cycle);
+
+#ifndef TEST
+	handle_monitor();
+#endif
+}
+
+void
+step()
+{
+	step_quiet();
 	if (verbose)
 		chipStatus();
-
-	handle_monitor();
 }
 
 /************************************************************
@@ -977,10 +1001,17 @@ initChip()
 
 	/* hold RESET for 8 cycles */
 	for (int i = 0; i < 16; i++)
-		step();
+		step_quiet();
 
 	/* release RESET */
 	setHigh(res);
+
+#ifdef TEST
+	for (int i = 0; i < 18 + 2*18; i++)
+		step_quiet();
+
+	cycle = -1;
+#endif
 }
 
 /************************************************************
@@ -989,17 +1020,109 @@ initChip()
  *
  ************************************************************/
 
+#ifndef TEST
 int
 main()
 {
 	/* set up data structures for efficient emulation */
 	setupNodesAndTransistors();
-	/* set initial state of nodes, transistors, inputs; RESET chip */
-	initChip();
 	/* set up memory for user program */
 	init_monitor();
-
+	/* set initial state of nodes, transistors, inputs; RESET chip */
+	initChip();
 	/* emulate the 6502! */
-	for (;;)
+	for (;;) {
 		step();
+		if (verbose)
+			chipStatus();
+	};
 }
+#else
+
+#define BRK_LENGTH 2 /* BRK pushes PC + 2 onto the stack */
+
+#define MAX_CYCLES 100
+#define SETUP_ADDR 0xF400
+#define INSTRUCTION_ADDR 0xF800
+#define BRK_VECTOR 0xFC00
+
+struct {
+	BOOL crash;
+	int length;
+	int cycles;
+} data[256];
+
+int
+main()
+{
+	/* set up data structures for efficient emulation */
+	setupNodesAndTransistors();
+
+	verbose = 0;
+
+	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
+		printf("testing opcode: $%02X: ", opcode);
+
+		memory[0xFFFC] = SETUP_ADDR & 0xFF;
+		memory[0xFFFD] = SETUP_ADDR >> 8;
+		uint16_t addr = SETUP_ADDR;
+		memory[addr++] = 0xA9; /* LDA #P */
+		memory[addr++] = 0;
+		memory[addr++] = 0x48; /* PHA    */
+		memory[addr++] = 0xA9; /* LHA #A */
+		memory[addr++] = 0;
+		memory[addr++] = 0xA2; /* LDX #X */
+		memory[addr++] = 0;
+		memory[addr++] = 0xA0; /* LDY #Y */
+		memory[addr++] = 0;
+		memory[addr++] = 0x28; /* PLP    */
+		memory[addr++] = 0x4C; /* JMP    */
+		memory[addr++] = INSTRUCTION_ADDR & 0xFF;
+		memory[addr++] = INSTRUCTION_ADDR >> 8;
+
+		memory[INSTRUCTION_ADDR] = opcode;
+
+		memory[0xFFFE] = BRK_VECTOR & 0xFF;
+		memory[0xFFFF] = BRK_VECTOR >> 8;
+		memory[BRK_VECTOR] = 0x00; /* loop there */
+
+		initChip();
+
+		/**************************************************
+		 * find out length of instruction in bytes
+		 **************************************************/
+		int i;
+		for (i = 0; i < MAX_CYCLES; i++) {
+			step();
+			if (isNodeHigh(clk0) && isNodeHigh(rw) && readAddressBus() == BRK_VECTOR)
+				break;
+		};
+
+		if (i == MAX_CYCLES) {
+			data[opcode].crash = YES;
+		} else {
+			data[opcode].crash = NO;
+			uint16_t brk_addr = memory[0x01FC] | memory[0x1FD]<<8;
+			data[opcode].length = brk_addr - INSTRUCTION_ADDR - BRK_LENGTH;
+
+			/**************************************************
+			 * find out length of instruction in cycles
+			 **************************************************/
+			initChip();
+			for (i = 0; i < MAX_CYCLES; i++) {
+				step();
+				if (isNodeHigh(clk0) && isNodeHigh(rw) && (readNOTIR() ^ 0xFF) == 0x00)
+					break;
+			};
+			data[opcode].cycles = (cycle - 2) / 2;
+
+		}
+		if (data[opcode].crash) {
+			printf("CRASH\n");
+		} else {
+			printf("bytes: %d ", data[opcode].length);
+			printf("cycles: %d\n", data[opcode].cycles);
+		}
+	}
+}
+#endif
