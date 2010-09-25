@@ -76,6 +76,14 @@ typedef uint8_t state_t;
 
 typedef unsigned int bitmap_t;
 
+#define DECLARE_BITMAP(name, count) bitmap_t name[count/sizeof(bitmap_t)+1]
+
+static inline void
+bitmap_clear(bitmap_t *bitmap, count_t count)
+{
+	bzero(bitmap, count/sizeof(bitmap_t)+1);
+}
+
 static inline void
 set_bitmap(bitmap_t *bitmap, int index, BOOL state)
 {
@@ -98,10 +106,10 @@ get_bitmap(bitmap_t *bitmap, int index)
  ************************************************************/
 
 /* everything that describes a node */
-bitmap_t nodes_pullup[NODES/sizeof(bitmap_t)+1];
-bitmap_t nodes_pulldown[NODES/sizeof(bitmap_t)+1];
-bitmap_t nodes_state_value[NODES/sizeof(bitmap_t)+1];
-bitmap_t nodes_state_floating[NODES/sizeof(bitmap_t)+1];
+DECLARE_BITMAP(nodes_pullup, NODES);
+DECLARE_BITMAP(nodes_pulldown, NODES);
+DECLARE_BITMAP(nodes_state_value, NODES);
+DECLARE_BITMAP(nodes_state_floating, NODES);
 nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
@@ -165,7 +173,7 @@ get_nodes_state_floating(transnum_t t)
 nodenum_t transistors_gate[TRANSISTORS];
 nodenum_t transistors_c1[TRANSISTORS];
 nodenum_t transistors_c2[TRANSISTORS];
-bitmap_t transistors_on[TRANSISTORS/sizeof(bitmap_t)+1];
+DECLARE_BITMAP(transistors_on, TRANSISTORS);
 
 static inline void
 set_transistors_on(transnum_t t, BOOL state)
@@ -194,7 +202,7 @@ typedef struct {
 
 /* the nodes we are working with */
 nodenum_t list1[NODES];
-bitmap_t bitmap1[NODES/sizeof(bitmap_t)+1];
+DECLARE_BITMAP(bitmap1, NODES);
 list_t listin = {
 	.list = list1,
 	.bitmap = bitmap1
@@ -202,7 +210,7 @@ list_t listin = {
 
 /* the nodes we are collecting for the next run */
 nodenum_t list2[NODES];
-bitmap_t bitmap2[NODES/sizeof(bitmap_t)+1];
+DECLARE_BITMAP(bitmap2, NODES);
 list_t listout = {
 	.list = list2,
 	.bitmap = bitmap2
@@ -238,8 +246,8 @@ lists_switch()
 static inline void
 listout_clear()
 {
-	bzero(listout.bitmap, sizeof(*listout.bitmap)*NODES/sizeof(bitmap_t));
 	listout.count = 0;
+	bitmap_clear(listout.bitmap, NODES);
 }
 
 static inline void
@@ -270,13 +278,13 @@ listout_contains(nodenum_t el)
  */
 static nodenum_t group[NODES];
 static count_t groupcount;
-static bitmap_t groupbitmap[NODES/sizeof(bitmap_t)+1];
+DECLARE_BITMAP(groupbitmap, NODES);
 
 static inline void
 group_clear()
 {
 	groupcount = 0;
-	bzero(groupbitmap, sizeof(groupbitmap));
+	bitmap_clear(groupbitmap, NODES);
 }
 
 static inline void
