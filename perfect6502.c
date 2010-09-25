@@ -74,7 +74,15 @@ typedef uint8_t state_t;
  *
  ************************************************************/
 
+#if 1
+typedef unsigned long long bitmap_t;
+#define BITMAP_SHIFT 6
+#define BITMAP_MASK 63
+#else
 typedef unsigned int bitmap_t;
+#define BITMAP_SHIFT 5
+#define BITMAP_MASK 31
+#endif
 
 #define DECLARE_BITMAP(name, count) bitmap_t name[count/sizeof(bitmap_t)+1]
 
@@ -88,15 +96,15 @@ static inline void
 set_bitmap(bitmap_t *bitmap, int index, BOOL state)
 {
 	if (state)
-		bitmap[index>>5] |= 1 << (index & 31);
+		bitmap[index>>BITMAP_SHIFT] |= 1ULL << (index & BITMAP_MASK);
 	else
-		bitmap[index>>5] &= ~(1 << (index & 31));
+		bitmap[index>>BITMAP_SHIFT] &= ~(1ULL << (index & BITMAP_MASK));
 }
 
 static inline BOOL
 get_bitmap(bitmap_t *bitmap, int index)
 {
-	return (bitmap[index>>5] >> (index & 31)) & 1;
+	return (bitmap[index>>BITMAP_SHIFT] >> (index & BITMAP_MASK)) & 1;
 }
 
 /************************************************************
