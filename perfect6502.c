@@ -1007,7 +1007,7 @@ initChip()
 	setHigh(res);
 
 #ifdef TEST
-	for (int i = 0; i < 18 + 2*18; i++)
+	for (int i = 0; i < 63; i++)
 		step_quiet();
 
 	cycle = -1;
@@ -1046,6 +1046,13 @@ main()
 #define INSTRUCTION_ADDR 0xF800
 #define BRK_VECTOR 0xFC00
 
+#define MAGIC_8 0xEA
+#define MAGIC_16 0xAB1E
+
+#define IS_READ_CYCLE (isNodeHigh(clk0) && isNodeHigh(rw))
+#define IS_WRITE_CYCLE (isNodeHigh(clk0) && !isNodeHigh(rw))
+#define IS_READING(a) (IS_READ_CYCLE && readAddressBus() == (a))
+
 struct {
 	BOOL crash;
 	int length;
@@ -1061,11 +1068,15 @@ main()
 	verbose = 0;
 
 	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
+//	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
 		printf("testing opcode: $%02X: ", opcode);
 
 		memory[0xFFFC] = SETUP_ADDR & 0xFF;
 		memory[0xFFFD] = SETUP_ADDR >> 8;
 		uint16_t addr = SETUP_ADDR;
+		memory[addr++] = 0xA2; /* LDA #S */
+		memory[addr++] = 0x9A; /* TXS */
+		memory[addr++] = 0x48; /* PHA    */
 		memory[addr++] = 0xA9; /* LDA #P */
 		memory[addr++] = 0;
 		memory[addr++] = 0x48; /* PHA    */
@@ -1080,7 +1091,10 @@ main()
 		memory[addr++] = INSTRUCTION_ADDR & 0xFF;
 		memory[addr++] = INSTRUCTION_ADDR >> 8;
 
-		memory[INSTRUCTION_ADDR] = opcode;
+		memory[INSTRUCTION_ADDR + 0] = opcode;
+		memory[INSTRUCTION_ADDR + 1] = 0;
+		memory[INSTRUCTION_ADDR + 2] = 0;
+		memory[INSTRUCTION_ADDR + 3] = 0;
 
 		memory[0xFFFE] = BRK_VECTOR & 0xFF;
 		memory[0xFFFF] = BRK_VECTOR >> 8;
@@ -1094,7 +1108,7 @@ main()
 		int i;
 		for (i = 0; i < MAX_CYCLES; i++) {
 			step();
-			if (isNodeHigh(clk0) && isNodeHigh(rw) && readAddressBus() == BRK_VECTOR)
+			if (IS_READING(BRK_VECTOR))
 				break;
 		};
 
@@ -1102,7 +1116,7 @@ main()
 			data[opcode].crash = YES;
 		} else {
 			data[opcode].crash = NO;
-			uint16_t brk_addr = memory[0x01FC] | memory[0x1FD]<<8;
+			uint16_t brk_addr = memory[0x0100+readSP()+2] | memory[0x0100+readSP()+3]<<8;
 			data[opcode].length = brk_addr - INSTRUCTION_ADDR - BRK_LENGTH;
 
 			/**************************************************
@@ -1111,11 +1125,29 @@ main()
 			initChip();
 			for (i = 0; i < MAX_CYCLES; i++) {
 				step();
-				if (isNodeHigh(clk0) && isNodeHigh(rw) && (readNOTIR() ^ 0xFF) == 0x00)
+				if ((readNOTIR() ^ 0xFF) == 0x00)
 					break;
 			};
-			data[opcode].cycles = (cycle - 2) / 2;
+			data[opcode].cycles = (cycle - 1) / 2;
 
+			/**************************************************
+			 * find out reads
+			 **************************************************/
+			initChip();
+			if (data[opcode].length == 2) {
+				memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
+			} else if (data[opcode].length == 3) {
+				memory[INSTRUCTION_ADDR + 1] = MAGIC_16 & 0xFF;
+				memory[INSTRUCTION_ADDR + 2] = MAGIC_16 >> 8;
+			}
+
+			for (i = 0; i < data[opcode].cycles * 2; i++) {
+				step();
+				if (IS_READ_CYCLE) {
+//					printf("read: %04X\n", readAddressBus());
+				}
+			};
+//			data[opcode].cycles = (cycle - 2) / 2;
 		}
 		if (data[opcode].crash) {
 			printf("CRASH\n");
