@@ -1071,6 +1071,12 @@ struct {
 	BOOL izy;
 	BOOL reads;
 	BOOL writes;
+	BOOL inputa;
+	BOOL outputa;
+	BOOL outputx;
+	BOOL outputy;
+	BOOL outputs;
+	BOOL outputp;
 } data[256];
 
 uint16_t initial_s, initial_p, initial_a, initial_x, initial_y;
@@ -1220,6 +1226,82 @@ main()
 				}
 			};
 
+			/**************************************************
+			 * find out whether A is an input
+			 **************************************************/
+#define MAGIC_A_1 0x17
+#define MAGIC_A_2 0xEA
+			setup_memory(opcode);
+			memory[initial_a] = MAGIC_A_1;
+			initChip();
+			for (i = 0; i < data[opcode].cycles * 2; i++) {
+				step();
+			};
+			DECLARE_BITMAP(transistors_1, TRANSISTORS);
+			memcpy(transistors_on, transistors_1, sizeof(transistors_on));
+
+			setup_memory(opcode);
+			memory[initial_a] = MAGIC_A_2;
+			initChip();
+			for (i = 0; i < data[opcode].cycles * 2; i++) {
+				step();
+			};
+
+			BOOL identical = YES;
+			for (count_t t = 0; t < TRANSISTORS; t++) {
+				if (get_transistors_on(i) != get_bitmap(transistors_1, i)) {
+					identical = NO;
+					break;
+				}
+			}
+			data[opcode].inputa = !identical;
+
+			uint8_t magics[] = { 
+				/* all 8 bit primes */
+				2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
+//				31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+//				73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
+//				127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
+//				179, 181, 191, 193, 197, 199, 211, 223, 227, 229,
+				233, 239, 241, 251,
+				/* and some other interesting numbers */
+				0, 1, 0x55, 0xAA, 0xFF
+				};
+			/**************************************************
+			 * find out inputs
+			 **************************************************/
+			//xxx
+			/**************************************************
+			 * find out outputs
+			 **************************************************/
+			data[opcode].outputa = NO;
+			data[opcode].outputx = NO;
+			data[opcode].outputy = NO;
+			data[opcode].outputs = NO;
+			data[opcode].outputp = NO;
+
+			for (int j = 0; j < sizeof(magics)/sizeof(*magics) - 5; j++) {
+				setup_memory(opcode);
+				memory[initial_a] = magics[j + 0];
+				memory[initial_x] = magics[j + 1];
+				memory[initial_y] = magics[j + 2];
+				memory[initial_s] = magics[j + 3];
+				memory[initial_p] = magics[j + 4];
+				initChip();
+				for (i = 0; i < data[opcode].cycles * 2; i++) {
+					step();
+				};
+				if (readA() != magics[j + 0])
+					data[opcode].outputa = YES;
+				if (readX() != magics[j + 1])
+					data[opcode].outputx = YES;
+				if (readY() != magics[j + 2])
+					data[opcode].outputy = YES;
+				if (readSP() != magics[j + 3])
+					data[opcode].outputs = YES;
+				if ((readP() & 0xCF) != (magics[j + 4] & 0xCF)) /* NV#BDIZC */
+					data[opcode].outputp = YES;
+			}
 		}
 		if (data[opcode].crash) {
 			printf("CRASH\n");
@@ -1242,6 +1324,48 @@ main()
 			printf("r: %d ", data[opcode].reads);
 			printf("w: %d ", data[opcode].writes);
 #else
+			if (data[opcode].inputa)
+				printf("A");
+			else
+				printf("_");
+
+			printf("=>");
+
+			if (data[opcode].outputa)
+				printf("A");
+			else
+				printf("_");
+			if (data[opcode].outputx)
+				printf("X");
+			else
+				printf("_");
+			if (data[opcode].outputy)
+				printf("Y");
+			else
+				printf("_");
+			if (data[opcode].outputs)
+				printf("S");
+			else
+				printf("_");
+			if (data[opcode].outputp)
+				printf("P");
+			else
+				printf("_");
+
+			printf(" - ");
+
+			if (data[opcode].reads)
+				printf("r");
+			else
+				printf(" ");
+
+			if (data[opcode].writes)
+				printf("w");
+			else
+				printf(" ");
+
+			printf(" ");
+
 			if (data[opcode].izy) {
 				printf("izy ");
 			} else if (data[opcode].izx) {
@@ -1260,13 +1384,6 @@ main()
 				printf("abs ");
 			}
 
-
-			if (data[opcode].reads) {
-				printf("r");
-			}
-			if (data[opcode].writes) {
-				printf("w ");
-			}
 #endif
 			printf("\n");
 		}
