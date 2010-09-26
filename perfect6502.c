@@ -529,10 +529,16 @@ recalcNodeList(const nodenum_t *source, count_t count)
 {
 	listin_fill(source, count);
 
+//	static int highest = 0;
 	int j;
 	for (j = 0; j < 100; j++) {	/* loop limiter */
-		if (!listin_count())
-			break;
+		if (!listin_count()) {
+//			if (j > highest) {
+//				highest = j;
+//				printf("******* NEW HIGHEST ***** %d\n", highest);
+//			}
+//			break;
+		}
 
 		listout_clear();
 
@@ -553,10 +559,6 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 */
 		lists_switch();
 	}
-//	if (j > highest) {
-//		highest = j;
-//		printf("%d\n", highest);
-//	}
 }
 
 void
@@ -1144,11 +1146,11 @@ main()
 	/* set up data structures for efficient emulation */
 	setupNodesAndTransistors();
 
-	verbose = 1;
+	verbose = 0;
 
-//	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
+	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
-	for (int opcode = 0x15; opcode <= 0x15; opcode++) {
+//	for (int opcode = 0x15; opcode <= 0x15; opcode++) {
 		printf("$%02X: ", opcode);
 
 		/**************************************************
@@ -1278,7 +1280,7 @@ main()
 			/**************************************************
 			 * find out inputs
 			 **************************************************/
-printf("AAA\n");
+//printf("AAA\n");
 			for (int k = 0; k < 5; k++) {
 				BOOL different = NO;
 				int reads, writes;
@@ -1427,7 +1429,7 @@ printf("AAA\n");
 					case 4: data[opcode].inputp = different; break;
 				}
 			}
-printf("BBB\n");
+//printf("BBB\n");
 
 			/**************************************************
 			 * find out outputs
@@ -1445,6 +1447,38 @@ printf("BBB\n");
 				memory[initial_y] = magics[j + 2];
 				memory[initial_s] = magics[j + 3];
 				memory[initial_p] = magics[j + 4];
+				if (data[opcode].length == 2) {
+					memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
+				} else if (data[opcode].length == 3) {
+					memory[INSTRUCTION_ADDR + 1] = MAGIC_16 & 0xFF;
+					memory[INSTRUCTION_ADDR + 2] = MAGIC_16 >> 8;
+				}
+				switch (data[opcode].addmode) {
+					case ADDMODE_IZY:
+						//TODO
+						break;
+					case ADDMODE_IZX:
+						//TODO
+						break;
+					case ADDMODE_ZPY:
+						memory[MAGIC_8 + memory[initial_y]] = MAGIC_DATA8;
+						break;
+					case ADDMODE_ZPX:
+						memory[MAGIC_8 + memory[initial_x]] = MAGIC_DATA8;
+						break;
+					case ADDMODE_ZP:
+						memory[MAGIC_8] = MAGIC_DATA8;
+						break;
+					case ADDMODE_ABSY:
+						memory[MAGIC_16 + memory[initial_y]] = MAGIC_DATA8;
+						break;
+					case ADDMODE_ABSX:
+						memory[MAGIC_16 + memory[initial_x]] = MAGIC_DATA8;
+						break;
+					case ADDMODE_ABS:
+						memory[MAGIC_16] = MAGIC_DATA8;
+						break;
+				}
 				initChip();
 				for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
 					step();
