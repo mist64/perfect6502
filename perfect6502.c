@@ -1061,6 +1061,7 @@ struct {
 	BOOL crash;
 	int length;
 	int cycles;
+	int addmode;
 	BOOL zp;
 	BOOL abs;
 	BOOL zpx;
@@ -1082,6 +1083,18 @@ struct {
 	BOOL outputs;
 	BOOL outputp;
 } data[256];
+
+enum {
+	ADDMODE_UNKNOWN,
+	ADDMODE_IZY,
+	ADDMODE_IZX,
+	ADDMODE_ZPY,
+	ADDMODE_ZPX,
+	ADDMODE_ZP,
+	ADDMODE_ABSY,
+	ADDMODE_ABSX,
+	ADDMODE_ABS,
+};
 
 uint16_t initial_s, initial_p, initial_a, initial_x, initial_y;
 
@@ -1131,11 +1144,11 @@ main()
 	/* set up data structures for efficient emulation */
 	setupNodesAndTransistors();
 
-	verbose = 0;
+	verbose = 1;
 
-	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
+//	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
-//	for (int opcode = 0x26; opcode <= 0x26; opcode++) {
+	for (int opcode = 0x15; opcode <= 0x15; opcode++) {
 		printf("$%02X: ", opcode);
 
 		/**************************************************
@@ -1199,7 +1212,7 @@ main()
 			data[opcode].reads = NO;
 			data[opcode].writes = NO;
 
-			for (i = 0; i < data[opcode].cycles * 2; i++) {
+			for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
 				step();
 				if (IS_READ_CYCLE || IS_WRITE_CYCLE) {
 //printf("RW@ %X\n", readAddressBus());
@@ -1230,6 +1243,25 @@ main()
 				}
 			};
 
+			data[opcode].addmode = ADDMODE_UNKNOWN;
+			if (data[opcode].izy) {
+				data[opcode].addmode = ADDMODE_IZY;
+			} else if (data[opcode].izx) {
+				data[opcode].addmode = ADDMODE_IZX;
+			} else if (data[opcode].zpy) {
+				data[opcode].addmode = ADDMODE_ZPY;
+			} else if (data[opcode].zpx) {
+				data[opcode].addmode = ADDMODE_ZPX;
+			} else if (data[opcode].zp) {
+				data[opcode].addmode = ADDMODE_ZP;
+			} else if (data[opcode].absy) {
+				data[opcode].addmode = ADDMODE_ABSY;
+			} else if (data[opcode].absx) {
+				data[opcode].addmode = ADDMODE_ABSX;
+			} else if (data[opcode].abs) {
+				data[opcode].addmode = ADDMODE_ABS;
+			}
+
 			/**************************************************/
 
 			uint8_t magics[] = { 
@@ -1246,13 +1278,13 @@ main()
 			/**************************************************
 			 * find out inputs
 			 **************************************************/
-
+printf("AAA\n");
 			for (int k = 0; k < 5; k++) {
 				BOOL different = NO;
 				int reads, writes;
 				uint16_t read[100], write[100], write_data[100];
 				uint8_t end_a, end_x, end_y, end_s, end_p;
-				for (int j = 0; j < sizeof(magics)/sizeof(*magics) - 5; j++) {
+				for (int j = 0; j < sizeof(magics)/sizeof(*magics); j++) {
 					setup_memory(opcode);
 					if (data[opcode].length == 2) {
 						memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
@@ -1267,10 +1299,37 @@ main()
 						case 3: memory[initial_s] = magics[j]; break;
 						case 4: memory[initial_p] = magics[j]; break;
 					}
+#define MAGIC_DATA8 3
+					switch (data[opcode].addmode) {
+						case ADDMODE_IZY:
+							//TODO
+							break;
+						case ADDMODE_IZX:
+							//TODO
+							break;
+						case ADDMODE_ZPY:
+							memory[MAGIC_8 + memory[initial_y]] = MAGIC_DATA8;
+							break;
+						case ADDMODE_ZPX:
+							memory[MAGIC_8 + memory[initial_x]] = MAGIC_DATA8;
+							break;
+						case ADDMODE_ZP:
+							memory[MAGIC_8] = MAGIC_DATA8;
+							break;
+						case ADDMODE_ABSY:
+							memory[MAGIC_16 + memory[initial_y]] = MAGIC_DATA8;
+							break;
+						case ADDMODE_ABSX:
+							memory[MAGIC_16 + memory[initial_x]] = MAGIC_DATA8;
+							break;
+						case ADDMODE_ABS:
+							memory[MAGIC_16] = MAGIC_DATA8;
+							break;
+					}
 					initChip();
 					writes = 0;
 					reads = 0;
-					for (i = 0; i < data[opcode].cycles * 2; i++) {
+					for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
 						step();
 						if (IS_READ_CYCLE) {
 							if (!j)
@@ -1368,6 +1427,7 @@ main()
 					case 4: data[opcode].inputp = different; break;
 				}
 			}
+printf("BBB\n");
 
 			/**************************************************
 			 * find out outputs
@@ -1386,7 +1446,7 @@ main()
 				memory[initial_s] = magics[j + 3];
 				memory[initial_p] = magics[j + 4];
 				initChip();
-				for (i = 0; i < data[opcode].cycles * 2; i++) {
+				for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
 					step();
 				};
 				if (readA() != magics[j + 0])
@@ -1466,36 +1526,29 @@ main()
 			else
 				printf("_");
 
-			printf(" - ");
+			printf(" ");
 
 			if (data[opcode].reads)
-				printf("r");
+				printf("R");
 			else
-				printf(" ");
+				printf("_");
 
 			if (data[opcode].writes)
-				printf("w");
+				printf("W");
 			else
-				printf(" ");
+				printf("_");
 
 			printf(" ");
 
-			if (data[opcode].izy) {
-				printf("izy ");
-			} else if (data[opcode].izx) {
-				printf("izx ");
-			} else if (data[opcode].zpy) {
-				printf("zpy ");
-			} else if (data[opcode].zpx) {
-				printf("zpx ");
-			} else if (data[opcode].zp) {
-				printf("zp ");
-			} else if (data[opcode].absy) {
-				printf("absy ");
-			} else if (data[opcode].absx) {
-				printf("absx ");
-			} else if (data[opcode].abs) {
-				printf("abs ");
+			switch (data[opcode].addmode) {
+				case ADDMODE_IZY: printf("izy"); break;
+				case ADDMODE_IZX: printf("izx"); break;
+				case ADDMODE_ZPY: printf("zpy"); break;
+				case ADDMODE_ZPX: printf("zpx"); break;
+				case ADDMODE_ZP: printf("zp"); break;
+				case ADDMODE_ABSY: printf("absy"); break;
+				case ADDMODE_ABSX: printf("absx"); break;
+				case ADDMODE_ABS: printf("abs"); break;
 			}
 
 			printf("\n");
