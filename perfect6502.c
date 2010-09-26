@@ -1072,6 +1072,10 @@ struct {
 	BOOL reads;
 	BOOL writes;
 	BOOL inputa;
+	BOOL inputx;
+	BOOL inputy;
+	BOOL inputs;
+	BOOL inputp;
 	BOOL outputa;
 	BOOL outputx;
 	BOOL outputy;
@@ -1131,7 +1135,7 @@ main()
 
 	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
-//	for (int opcode = 0xB1; opcode <= 0xB1; opcode++) {
+//	for (int opcode = 0x26; opcode <= 0x26; opcode++) {
 		printf("$%02X: ", opcode);
 
 		/**************************************************
@@ -1226,35 +1230,7 @@ main()
 				}
 			};
 
-			/**************************************************
-			 * find out whether A is an input
-			 **************************************************/
-#define MAGIC_A_1 0x17
-#define MAGIC_A_2 0xEA
-			setup_memory(opcode);
-			memory[initial_a] = MAGIC_A_1;
-			initChip();
-			for (i = 0; i < data[opcode].cycles * 2; i++) {
-				step();
-			};
-			DECLARE_BITMAP(transistors_1, TRANSISTORS);
-			memcpy(transistors_on, transistors_1, sizeof(transistors_on));
-
-			setup_memory(opcode);
-			memory[initial_a] = MAGIC_A_2;
-			initChip();
-			for (i = 0; i < data[opcode].cycles * 2; i++) {
-				step();
-			};
-
-			BOOL identical = YES;
-			for (count_t t = 0; t < TRANSISTORS; t++) {
-				if (get_transistors_on(i) != get_bitmap(transistors_1, i)) {
-					identical = NO;
-					break;
-				}
-			}
-			data[opcode].inputa = !identical;
+			/**************************************************/
 
 			uint8_t magics[] = { 
 				/* all 8 bit primes */
@@ -1270,7 +1246,129 @@ main()
 			/**************************************************
 			 * find out inputs
 			 **************************************************/
-			//xxx
+
+			for (int k = 0; k < 5; k++) {
+				BOOL different = NO;
+				int reads, writes;
+				uint16_t read[100], write[100], write_data[100];
+				uint8_t end_a, end_x, end_y, end_s, end_p;
+				for (int j = 0; j < sizeof(magics)/sizeof(*magics) - 5; j++) {
+					setup_memory(opcode);
+					if (data[opcode].length == 2) {
+						memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
+					} else if (data[opcode].length == 3) {
+						memory[INSTRUCTION_ADDR + 1] = MAGIC_16 & 0xFF;
+						memory[INSTRUCTION_ADDR + 2] = MAGIC_16 >> 8;
+					}
+					switch (k) {
+						case 0: memory[initial_a] = magics[j]; break;
+						case 1: memory[initial_x] = magics[j]; break;
+						case 2: memory[initial_y] = magics[j]; break;
+						case 3: memory[initial_s] = magics[j]; break;
+						case 4: memory[initial_p] = magics[j]; break;
+					}
+					initChip();
+					writes = 0;
+					reads = 0;
+					for (i = 0; i < data[opcode].cycles * 2; i++) {
+						step();
+						if (IS_READ_CYCLE) {
+							if (!j)
+								read[reads++] = readAddressBus();
+							else
+								if (read[reads++] != readAddressBus()) {
+									different = YES;
+//printf("[[[%d]]]", __LINE__);
+									break;
+								}
+						}
+						if (IS_WRITE_CYCLE) {
+							if (!j) {
+								write[writes] = readAddressBus();
+								write_data[writes++] = readDataBus();
+							} else {
+								if (write[writes] != readAddressBus()) {
+									different = YES;
+//printf("[[[%d]]]", __LINE__);
+									break;
+								}
+								if (write_data[writes++] != readDataBus()) {
+//printf("[[[%d:k=%d;%x@%x/%x]]]", __LINE__, k, write[writes-1], write_data[writes-1], readDataBus());
+									different = YES;
+									break;
+								}
+							}
+						}
+					};
+					if (different) /* bus cycles were different */
+						break;
+					/* changes A */
+					if (!(k == 0)) {
+						if (!j) {
+							end_a = readA();
+						} else {
+							if (end_a != readA()) {
+								different = YES;
+								break;
+							}
+						}
+					}
+					/* changes X */
+					if (!(k == 1)) {
+						if (!j) {
+							end_x = readX();
+						} else {
+							if (end_x != readX()) {
+								different = YES;
+								break;
+							}
+						}
+					}
+					/* changes Y */
+					if (!(k == 2)) {
+						if (!j) {
+							end_y = readY();
+						} else {
+							if (end_y != readY()) {
+								different = YES;
+								break;
+							}
+						}
+					}
+					/* changes S */
+					if (!(k == 3)) {
+						if (!j) {
+							end_s = readSP();
+						} else {
+							if (end_s != readSP()) {
+								different = YES;
+//printf("[%x/%x]", end_s, readSP());
+								break;
+							}
+						}
+					}
+					/* changes P */
+					if (!(k == 4)) {
+						if (!j) {
+							end_p = readP();
+						} else {
+							if (end_p != readP()) {
+								different = YES;
+								break;
+							}
+						}
+					}
+				}
+//printf("[%d DIFF: %d]", k, different);
+				switch (k) {
+					case 0: data[opcode].inputa = different; break;
+					case 1: data[opcode].inputx = different; break;
+					case 2: data[opcode].inputy = different; break;
+					case 3: data[opcode].inputs = different; break;
+					case 4: data[opcode].inputp = different; break;
+				}
+			}
+
 			/**************************************************
 			 * find out outputs
 			 **************************************************/
@@ -1303,6 +1401,18 @@ main()
 					data[opcode].outputp = YES;
 			}
 		}
+
+		if (data[opcode].absx || data[opcode].zpx || data[opcode].izx) {
+			if (!data[opcode].inputx)
+				printf("input X?? ");
+			data[opcode].inputx = NO;
+		}
+		if (data[opcode].absy || data[opcode].zpy || data[opcode].izy) {
+			if (!data[opcode].inputy)
+				printf("input Y?? ");
+			data[opcode].inputy = NO;
+		}
+
 		if (data[opcode].crash) {
 			printf("CRASH\n");
 		} else {
@@ -1312,20 +1422,24 @@ main()
 			else
 				printf("%d ", data[opcode].length);
 			printf("cycles: %d ", data[opcode].cycles);
-#if 0
-			printf("zp: %d ", data[opcode].zp);
-			printf("abs: %d ", data[opcode].abs);
-			printf("zpx: %d ", data[opcode].zpx);
-			printf("absx: %d ", data[opcode].absx);
-			printf("zpy: %d ", data[opcode].zpy);
-			printf("absy: %d ", data[opcode].absy);
-			printf("izx: %d ", data[opcode].izx);
-			printf("izy: %d ", data[opcode].izy);
-			printf("r: %d ", data[opcode].reads);
-			printf("w: %d ", data[opcode].writes);
-#else
 			if (data[opcode].inputa)
 				printf("A");
+			else
+				printf("_");
+			if (data[opcode].inputx)
+				printf("X");
+			else
+				printf("_");
+			if (data[opcode].inputy)
+				printf("Y");
+			else
+				printf("_");
+			if (data[opcode].inputs)
+				printf("S");
+			else
+				printf("_");
+			if (data[opcode].inputp)
+				printf("P");
 			else
 				printf("_");
 
@@ -1384,7 +1498,6 @@ main()
 				printf("abs ");
 			}
 
-#endif
 			printf("\n");
 		}
 	}
