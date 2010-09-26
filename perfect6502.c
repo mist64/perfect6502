@@ -20,9 +20,9 @@
  THE SOFTWARE.
 */
 
-int verbose = 1;
+int verbose = 0;
 
-#define TEST
+//#define TEST
 
 /************************************************************
  *
