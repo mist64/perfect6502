@@ -959,11 +959,12 @@ setupNodesAndTransistors()
 			j++;
 		}
 	}
+	count_t transistors = j;
 	if (verbose)
-		printf("unique transistors: %d\n", j);
+		printf("unique transistors: %d\n", transistors);
 
 	/* cross reference transistors in nodes data structures */
-	for (i = 0; i < TRANSISTORS; i++) {
+	for (i = 0; i < transistors; i++) {
 		nodenum_t gate = transistors_gate[i];
 		nodenum_t c1 = transistors_c1[i];
 		nodenum_t c2 = transistors_c2[i];
