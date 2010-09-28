@@ -20,9 +20,10 @@
  THE SOFTWARE.
 */
 
-int verbose = 0;
+int verbose = 1;
 
 //#define TEST
+//#define BROKEN_TRANSISTORS
 
 /************************************************************
  *
@@ -461,6 +462,10 @@ floatnode(nodenum_t nn)
 		set_nodes_state_floating(nn, 1);
 }
 
+#ifdef BROKEN_TRANSISTORS
+transnum_t broken_transistor = (transnum_t)-1;
+#endif
+
 void
 toggleTransistor(transnum_t tn)
 {
@@ -469,6 +474,13 @@ toggleTransistor(transnum_t tn)
 	BOOL on = isNodeHigh(transistors_gate[tn]);
 #else /* easier version: toggle it */
 	BOOL on = !get_transistors_on(tn);
+#endif
+
+#ifdef BROKEN_TRANSISTORS
+	if (tn == broken_transistor) {
+		if (!on)
+			return;
+	}
 #endif
 
 	set_transistors_on(tn, on);
@@ -926,6 +938,8 @@ step()
  *
  ************************************************************/
 
+count_t transistors;
+
 void
 setupNodesAndTransistors()
 {
@@ -944,6 +958,7 @@ setupNodesAndTransistors()
 		nodenum_t c2 = transdefs[i].c2;
 		/* skip duplicate transistors */
 		BOOL found = NO;
+#ifndef BROKEN_TRANSISTORS
 		for (count_t k = 0; k < i; k++) {
 			if (transdefs[k].gate == gate && 
 			    transdefs[k].c1 == c1 && 
@@ -952,6 +967,7 @@ setupNodesAndTransistors()
 				break; 
 			}
 		}
+#endif
 		if (!found) {
 			transistors_gate[j] = gate;
 			transistors_c1[j] = c1;
@@ -959,7 +975,7 @@ setupNodesAndTransistors()
 			j++;
 		}
 	}
-	count_t transistors = j;
+	transistors = j;
 	if (verbose)
 		printf("unique transistors: %d\n", transistors);
 
@@ -1004,7 +1020,7 @@ initChip()
 
 	/* hold RESET for 8 cycles */
 	for (int i = 0; i < 16; i++)
-		step_quiet();
+		step();
 
 	/* release RESET */
 	setHigh(res);
@@ -1023,24 +1039,7 @@ initChip()
  *
  ************************************************************/
 
-#ifndef TEST
-int
-main()
-{
-	/* set up data structures for efficient emulation */
-	setupNodesAndTransistors();
-	/* set up memory for user program */
-	init_monitor();
-	/* set initial state of nodes, transistors, inputs; RESET chip */
-	initChip();
-	/* emulate the 6502! */
-	for (;;) {
-		step();
-		if (verbose)
-			chipStatus();
-	};
-}
-#else
+#ifdef TEST
 
 #define BRK_LENGTH 2 /* BRK pushes PC + 2 onto the stack */
 
@@ -1589,5 +1588,76 @@ main()
 			printf("\n");
 		}
 	}
+}
+#elif defined(BROKEN_TRANSISTORS)
+
+#define MAX_CYCLES 33000
+BOOL log_rw[MAX_CYCLES];
+uint16_t log_ab[MAX_CYCLES];
+uint8_t log_db[MAX_CYCLES];
+int
+main()
+{
+	setupNodesAndTransistors();
+	for (int run = -1; run < transistors; run ++) {
+#if 0
+		/* skip a few runs! */
+		if (run == 0)
+			run = 180;
+#endif
+
+		if (run != -1) {
+			printf("testing transistor %d: ", run);
+			broken_transistor = run;
+		}
+
+		bzero(memory, 65536);
+		init_monitor();
+		initChip();
+		BOOL fail = NO;
+		for (int c = 0; c < MAX_CYCLES; c++) {
+			step();
+			if (run == -1) {
+				log_rw[c] = isNodeHigh(rw);
+				log_ab[c] = readAddressBus();
+				log_db[c] = readDataBus();
+			} else {
+				if (log_rw[c] != isNodeHigh(rw)) {
+					printf("FAIL, RW %d instead of %d @ %d\n", isNodeHigh(rw), log_rw[c], c);
+					fail = YES;
+					break;
+				}
+				if (log_ab[c] != readAddressBus()) {
+					printf("FAIL, AB 0x%04x instead of 0x%04x @ %d\n", readAddressBus(), log_ab[c], c);
+					fail = YES;
+					break;
+				}
+				if (log_db[c] != readDataBus()) {
+					printf("FAIL, DB 0x%02x instead of 0x%02x @ %d\n", readDataBus(), log_db[c], c);
+					fail = YES;
+					break;
+				}
+			}
+		}
+		if (run != -1 && !fail)
+			printf("PASS\n");
+	}
+}
+#else
+int
+main()
+{
+	/* set up data structures for efficient emulation */
+	setupNodesAndTransistors();
+	/* set up memory for user program */
+	init_monitor();
+	/* set initial state of nodes, transistors, inputs; RESET chip */
+	initChip();
+	/* emulate the 6502! */
+	for (;;) {
+		step();
+		if (verbose)
+			chipStatus();
+	};
 }
 #endif

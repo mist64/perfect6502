@@ -399,6 +399,7 @@ CHRIN() {
 /* CHROUT */
 static void
 CHROUT() {
+return;
 //exit(1);
 #if 0
 int a = *(unsigned short*)(&RAM[0x0100+S+1]) + 1;
@@ -913,7 +914,11 @@ kernal_dispatch() {
 		
 		case MAGIC_CONTINUATION: /*printf("--CONTINUATION--\n");*/ return 0;
 
+#if 0
 		default: printf("unknown PC=$%04X S=$%02X\n", PC, S); exit(1);
+#else
+		default: return 1;
+#endif
 	}
 	return 1;
 }
