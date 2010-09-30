@@ -20,7 +20,7 @@
  THE SOFTWARE.
 */
 
-int verbose = 1;
+int verbose = 0;
 
 //#define TEST
 //#define BROKEN_TRANSISTORS
@@ -1001,7 +1001,7 @@ setupNodesAndTransistors()
 }
 
 void
-initChip()
+resetChip()
 {
 	/* all nodes are floating */
 	for (nodenum_t nn = 0; nn < NODES; nn++) {
@@ -1165,7 +1165,7 @@ main()
 		 * find out length of instruction in bytes
 		 **************************************************/
 		setup_memory(opcode);
-		initChip();
+		resetChip();
 		int i;
 		for (i = 0; i < MAX_CYCLES; i++) {
 			step();
@@ -1184,7 +1184,7 @@ main()
 			 * find out length of instruction in cycles
 			 **************************************************/
 			setup_memory(opcode);
-			initChip();
+			resetChip();
 			for (i = 0; i < MAX_CYCLES; i++) {
 				step();
 				if ((readNOTIR() ^ 0xFF) == 0x00)
@@ -1202,7 +1202,7 @@ main()
 			memory[MAGIC_8 + X_OFFSET + 1] = MAGIC_IZX >> 8;
 			memory[MAGIC_8 + 0] = MAGIC_IZY & 0xFF;
 			memory[MAGIC_8 + 1] = MAGIC_IZY >> 8;
-			initChip();
+			resetChip();
 			if (data[opcode].length == 2) {
 				memory[INSTRUCTION_ADDR + 1] = MAGIC_8;
 			} else if (data[opcode].length == 3) {
@@ -1336,7 +1336,7 @@ main()
 							memory[MAGIC_16] = MAGIC_DATA8;
 							break;
 					}
-					initChip();
+					resetChip();
 					writes = 0;
 					reads = 0;
 					for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
@@ -1487,7 +1487,7 @@ main()
 						memory[MAGIC_16] = MAGIC_DATA8;
 						break;
 				}
-				initChip();
+				resetChip();
 				for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
 					step();
 				};
@@ -1621,7 +1621,7 @@ main()
 
 		bzero(memory, 65536);
 		init_monitor();
-		initChip();
+		resetChip();
 		BOOL fail = NO;
 		for (int c = 0; c < MAX_CYCLES; c++) {
 			step();
@@ -1744,26 +1744,24 @@ enum {
 	STATE_FIRST_FETCH
 };
 
-int
-main()
+void
+setup_perfect()
 {
 	setupNodesAndTransistors();
-
 	verbose = 0;
+}
 
-//	printf("$%02X: ", opcode);
 
-	/**************************************************
-	 * find out length of instruction in bytes
-	 **************************************************/
-	setup_memory(1, 0xEA, 0x00, 0x00, 0, 0, 0, 0, 0);
-//	setup_memory(2, 0xA9, 0x00, 0x00, 0, 0, 0, 0, 0);
-//	setup_memory(3, 0xFE, 0x00, 0x10, 0, 0, 0, 0, 0);
-	initChip();
+extern void setup_emu(void);
+
+uint16_t instr_ab[10];
+uint8_t instr_db[10];
+BOOL instr_rw[10];
+
+int
+perfect_measure_instruction()
+{
 	int state = STATE_BEFORE_INSTRUCTION;
-	uint16_t instr_ab[10];
-	uint8_t instr_db[10];
-	BOOL instr_rw[10];
 	int c = 0;
 	for (int i = 0; i < MAX_CYCLES; i++) {
 		uint16_t ab;
@@ -1794,14 +1792,32 @@ main()
 		}
 	};
 
-	int instr_cycles = c - 1;
-	for (c = 0; c < instr_cycles; c++ ) {
-		printf("%d T%d ", state, c);
+	return c - 1;
+}
+
+int
+main()
+{
+	setup_perfect();
+
+//	setup_memory(1, 0xEA, 0x00, 0x00, 0, 0, 0, 0, 0);
+//	setup_memory(2, 0xA9, 0x00, 0x00, 0, 0, 0, 0, 0);
+//	setup_memory(2, 0xAD, 0x00, 0x10, 0, 0, 0, 0, 0);
+	setup_memory(3, 0xFE, 0x00, 0x10, 0, 0, 0, 0, 0);
+//	setup_memory(3, 0x9D, 0xFF, 0x10, 0, 2, 0, 0, 0);
+	resetChip();
+
+	int instr_cycles = perfect_measure_instruction();
+
+	for (int c = 0; c < instr_cycles; c++ ) {
+		printf("T%d ", c+1);
 		if (instr_rw[c])
 			printf("R $%04X\n", instr_ab[c]);
 		else
 			printf("W $%04X = $%02X\n", instr_ab[c], instr_db[c]);
 	}
+
+	setup_emu();
 
 }
 #else
@@ -1813,7 +1829,7 @@ main()
 	/* set up memory for user program */
 	init_monitor();
 	/* set initial state of nodes, transistors, inputs; RESET chip */
-	initChip();
+	resetChip();
 	/* emulate the 6502! */
 	for (;;) {
 		step();
