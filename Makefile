@@ -1,4 +1,4 @@
-OBJS=runtime.o plugin.o perfect6502.o console.o emu.o
+OBJS=runtime.o runtime_init.o plugin.o perfect6502.o console.o emu.o
 CFLAGS=-Wall -O3
 CC=clang
 
