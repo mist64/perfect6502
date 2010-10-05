@@ -118,16 +118,14 @@ get_bitmap(bitmap_t *bitmap, int index)
 DECLARE_BITMAP(nodes_pullup, NODES);
 DECLARE_BITMAP(nodes_pulldown, NODES);
 DECLARE_BITMAP(nodes_state_value, NODES);
-DECLARE_BITMAP(nodes_state_floating, NODES);
 nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
 
 /*
- * The "floating" and "value" properties of VCC and GND are
- * never evaluated in the code, so we don't bother initializing
- * them properly or special-casing writes to them.
+ * The "value" propertiy of VCC and GND is never evaluated in the code,
+ * so we don't bother initializing it properly or special-casing writes.
  */
 
 static inline void
@@ -164,18 +162,6 @@ static inline BOOL
 get_nodes_state_value(transnum_t t)
 {
 	return get_bitmap(nodes_state_value, t);
-}
-
-static inline void
-set_nodes_state_floating(transnum_t t, BOOL state)
-{
-	set_bitmap(nodes_state_floating, t, state);
-}
-
-static inline BOOL
-get_nodes_state_floating(transnum_t t)
-{
-	return get_bitmap(nodes_state_floating, t);
 }
 
 /************************************************************
@@ -413,39 +399,30 @@ addNodeToGroup(nodenum_t i)
 }
 
 
-typedef struct {
-	BOOL value:1;
-	BOOL floating:1;
-} state_t;
-
-static inline state_t
+static inline BOOL
 getNodeValue()
 {
 	if (group_contains(vss))
-		return (state_t) { .value = 0, .floating = 0 };
+		return NO;
 
 	if (group_contains(vcc))
-		return (state_t) { .value = 1, .floating = 0 };
+		return YES;
 
 	if (group_contains_pulldown)
-		return (state_t) { .value = 0, .floating = 0 };
+		return NO;
 
 	if (group_contains_pullup)
-		return (state_t) { .value = 1, .floating = 0 };
+		return YES;
 
 	if (group_contains_hi)
-		return (state_t) { .value = 1, .floating = 1 };
+		return YES;
 	else
-		return (state_t) { .value = 0, .floating = 1 };
+		return NO;
 }
 
 void
 addRecalcNode(nodenum_t nn)
 {
-	/* no need to analyze VCC or GND */
-	if (nn == vss || nn == vcc)
-		return;
-
 	/* we already know about this node */
 	if (listout_contains(nn))
 		return;
@@ -477,12 +454,6 @@ toggleTransistor(transnum_t tn)
 
 	set_transistors_on(tn, on);
 
-	/* if the transistor is off, both nodes are floating */
-	if (!on) {
-		set_nodes_state_floating(transistors_c1[tn], 1);
-		set_nodes_state_floating(transistors_c2[tn], 1);
-	}
-
 	/* next time, we'll have to look at both nodes behind the transistor */
 	addRecalcNode(transistors_c1[tn]);
 	addRecalcNode(transistors_c2[tn]);
@@ -491,9 +462,6 @@ toggleTransistor(transnum_t tn)
 void
 recalcNode(nodenum_t node)
 {
-	if (node == vss || node == vcc)
-		return;
-
 	group_clear();
 
 	/*
@@ -503,7 +471,7 @@ recalcNode(nodenum_t node)
 	addNodeToGroup(node);
 
 	/* get the state of the group */
-	state_t newv = getNodeValue();
+	BOOL newv = getNodeValue();
 
 	/*
 	 * now all nodes in this group are in this state,
@@ -514,9 +482,8 @@ recalcNode(nodenum_t node)
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		BOOL needs_recalc = get_nodes_state_value(nn) != newv.value;
-		set_nodes_state_value(nn, newv.value);
-		set_nodes_state_floating(nn, newv.floating);
+		BOOL needs_recalc = get_nodes_state_value(nn) != newv;
+		set_nodes_state_value(nn, newv);
 		if (needs_recalc)
 			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
 				toggleTransistor(nodes_gates[nn][t]);
@@ -875,10 +842,9 @@ setupNodesAndTransistors()
 void
 resetChip()
 {
-	/* all nodes are floating */
+	/* all nodes are down */
 	for (nodenum_t nn = 0; nn < NODES; nn++) {
 		set_nodes_state_value(nn, 0);
-		set_nodes_state_floating(nn, 1);
 	}
 	/* all transistors are off */
 	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
