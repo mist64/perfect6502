@@ -391,16 +391,15 @@ addNodeToGroup(nodenum_t i)
 
 	group_add(i);
 
-	if (i == vss || i == vcc)
-		return;
-
-	for (count_t t = 0; t < nodes_c1c2count[i]; t++)
-		addNodeTransistor(i, nodes_c1c2s[i][t]);
+	/* revisit all transistors that are controlled by this node */
+	if (i != vss && i != vcc)
+		for (count_t t = 0; t < nodes_c1c2count[i]; t++)
+			addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
 
 static inline BOOL
-getNodeValue()
+getGroupValue()
 {
 	if (group_contains(vss))
 		return NO;
@@ -414,10 +413,7 @@ getNodeValue()
 	if (group_contains_pullup)
 		return YES;
 
-	if (group_contains_hi)
-		return YES;
-	else
-		return NO;
+	return group_contains_hi;
 }
 
 void
@@ -471,7 +467,7 @@ recalcNode(nodenum_t node)
 	addNodeToGroup(node);
 
 	/* get the state of the group */
-	BOOL newv = getNodeValue();
+	BOOL newv = getGroupValue();
 
 	/*
 	 * now all nodes in this group are in this state,
