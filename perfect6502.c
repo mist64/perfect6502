@@ -76,7 +76,7 @@ typedef uint8_t state_t;
  *
  ************************************************************/
 
-#if 1
+#if 1 /* on 64 bit CPUs */
 typedef unsigned long long bitmap_t;
 #define BITMAP_SHIFT 6
 #define BITMAP_MASK 63
@@ -280,8 +280,8 @@ listout_contains(nodenum_t el)
  ************************************************************/
 
 /*
- * a group is a set of connected nodes
- * that consequently share the same potential
+ * a group is a set of connected nodes, which consequently
+ * share the same potential
  *
  * we use an array and a count for O(1) insert and
  * iteration, and a redundant bitmap for O(1) lookup
@@ -396,12 +396,11 @@ addNodeToGroup(nodenum_t i)
 /*
  * 1. if the group is connected to GND, it's 0
  * 2. if the group is connected to VCC, it's 1
- * 3a. if there is a pullup node, it's 1
- * 3b. if there is a pulldown node, it's 0
- * (if both 1 and 2 are true, the first pullup or pulldown wins, with
- * a statistical advantage towards STATE_1)
- * 4. otherwise, if there is an 1/floating node, it's 1/floating
- * 5. otherwise, it's 0/floating (if there is a 0/floating node, which is always the case)
+ * 3. if there is a pullup node, it's 1
+ * 4. if there is a pulldown node, it's 0
+ * 5. otherwise, if there is an 1/floating node, it's 1/floating
+ * 6. otherwise, it's 0/floating (if there is a 0/floating node,
+ *    which is always the case)
  */
 static inline void
 getNodeValue(BOOL *value, BOOL *floating)
@@ -807,7 +806,7 @@ chipStatus()
  ************************************************************/
 
 void
-halfStep()
+step()
 {
 	BOOL clk = isNodeHigh(clk0);
 
@@ -819,12 +818,7 @@ halfStep()
 		writeDataBus(mRead(readAddressBus()));
 	if (!clk && !isNodeHigh(rw))
 		mWrite(readAddressBus(), readDataBus());
-}
 
-void
-step()
-{
-	halfStep();
 	cycle++;
 }
 
@@ -901,8 +895,6 @@ resetChip()
 	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
 		set_transistors_on(tn, NO);
 
-	cycle = 0;
-
 	setLow(res);
 	setLow(clk0);
 	setHigh(rdy);
@@ -921,6 +913,8 @@ resetChip()
 
 	/* release RESET */
 	setHigh(res);
+
+	cycle = 0;
 }
 
 /************************************************************
