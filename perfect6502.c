@@ -404,45 +404,31 @@ typedef struct {
  * 3. if there is a pullup node, it's 1
  * 4. if there is a pulldown node, it's 0
  * 5. otherwise, if there is an 1/floating node, it's 1/floating
- * 6. otherwise, it's 0/floating (if there is a 0/floating node,
- *    which is always the case)
+ * 6. otherwise, it's 0/floating
  */
 static inline state_t
 getNodeValue()
 {
-	state_t state = { .value = 0, .floating = 0 };
+	if (group_contains(vss))
+		return (state_t) { .value = 0, .floating = 0 };
 
-	if (group_contains(vss)) {
-		state.value = 0;
-		state.floating = 0;
-		return state;
-	}
+	if (group_contains(vcc))
+		return (state_t) { .value = 1, .floating = 0 };
 
-	if (group_contains(vcc)) {
-		state.value = 1;
-		state.floating = 0;
-		return state;
-	}
-
-	state.value = 0;
-	state.floating = 1;
+	BOOL contains_hi = NO;
 
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		if (get_nodes_pullup(nn)) {
-			state.value = 1;
-			state.floating = 0;
-			return state;
-		}
-		if (get_nodes_pulldown(nn)) {
-			state.value = 0;
-			state.floating = 0;
-			return state;
-		}
-		if (get_nodes_state_value(nn) && get_nodes_state_floating(nn))
-			state.value = 1;
+		if (get_nodes_pullup(nn))
+			return (state_t) { .value = 1, .floating = 0 };
+
+		if (get_nodes_pulldown(nn))
+			return (state_t) { .value = 0, .floating = 0 };
+
+		if (get_nodes_state_value(nn))
+			contains_hi = YES;
 	}
-	return state;
+	return (state_t) { .value = contains_hi, .floating = 1 };
 }
 
 void
