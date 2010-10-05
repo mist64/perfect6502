@@ -124,6 +124,12 @@ nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
 
+/*
+ * The "floating" and "value" properties of VCC and GND are
+ * never evaluated in the code, so we don't bother initializing
+ * them properly or special-casing writes to them.
+ */
+
 static inline void
 set_nodes_pullup(transnum_t t, BOOL state)
 {
@@ -289,11 +295,18 @@ static nodenum_t group[NODES];
 static count_t groupcount;
 DECLARE_BITMAP(groupbitmap, NODES);
 
+BOOL group_contains_pullup;
+BOOL group_contains_pulldown;
+BOOL group_contains_hi;
+
 static inline void
 group_clear()
 {
 	groupcount = 0;
 	bitmap_clear(groupbitmap, NODES);
+	group_contains_pullup = NO;
+	group_contains_pulldown = NO;
+	group_contains_hi = NO;
 }
 
 static inline void
@@ -301,6 +314,13 @@ group_add(nodenum_t i)
 {
 	group[groupcount++] = i;
 	set_bitmap(groupbitmap, i, 1);
+
+	if (get_nodes_pullup(i))
+		group_contains_pullup = YES;
+	if (get_nodes_pulldown(i))
+		group_contains_pulldown = YES;
+	if (get_nodes_state_value(i))
+		group_contains_hi = YES;
 }
 
 static inline nodenum_t
@@ -398,14 +418,6 @@ typedef struct {
 	BOOL floating:1;
 } state_t;
 
-/*
- * 1. if the group is connected to GND, it's 0
- * 2. if the group is connected to VCC, it's 1
- * 3. if there is a pullup node, it's 1
- * 4. if there is a pulldown node, it's 0
- * 5. otherwise, if there is an 1/floating node, it's 1/floating
- * 6. otherwise, it's 0/floating
- */
 static inline state_t
 getNodeValue()
 {
@@ -415,20 +427,16 @@ getNodeValue()
 	if (group_contains(vcc))
 		return (state_t) { .value = 1, .floating = 0 };
 
-	BOOL contains_hi = NO;
+	if (group_contains_pulldown)
+		return (state_t) { .value = 0, .floating = 0 };
 
-	for (count_t i = 0; i < group_count(); i++) {
-		nodenum_t nn = group_get(i);
-		if (get_nodes_pullup(nn))
-			return (state_t) { .value = 1, .floating = 0 };
+	if (group_contains_pullup)
+		return (state_t) { .value = 1, .floating = 0 };
 
-		if (get_nodes_pulldown(nn))
-			return (state_t) { .value = 0, .floating = 0 };
-
-		if (get_nodes_state_value(nn))
-			contains_hi = YES;
-	}
-	return (state_t) { .value = contains_hi, .floating = 1 };
+	if (group_contains_hi)
+		return (state_t) { .value = 1, .floating = 1 };
+	else
+		return (state_t) { .value = 0, .floating = 1 };
 }
 
 void
@@ -444,14 +452,6 @@ addRecalcNode(nodenum_t nn)
 
 	/* add node to list */
 	listout_add(nn);
-}
-
-void
-floatnode(nodenum_t nn)
-{
-	/* VCC and GND are constant */
-	if (nn != vss && nn != vcc)
-		set_nodes_state_floating(nn, 1);
 }
 
 #ifdef BROKEN_TRANSISTORS
@@ -479,8 +479,8 @@ toggleTransistor(transnum_t tn)
 
 	/* if the transistor is off, both nodes are floating */
 	if (!on) {
-		floatnode(transistors_c1[tn]);
-		floatnode(transistors_c2[tn]);
+		set_nodes_state_floating(transistors_c1[tn], 1);
+		set_nodes_state_floating(transistors_c2[tn], 1);
 	}
 
 	/* next time, we'll have to look at both nodes behind the transistor */
@@ -870,11 +870,6 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
-
-	set_nodes_state_value(vss, 0);
-	set_nodes_state_floating(vss, 0);
-	set_nodes_state_value(vcc, 1);
-	set_nodes_state_floating(vcc, 0);
 }
 
 void
