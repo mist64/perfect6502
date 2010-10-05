@@ -36,7 +36,7 @@
 
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
-typedef int BOOL;
+typedef unsigned int BOOL;
 
 #define NO 0
 #define YES 1
@@ -68,7 +68,6 @@ typedef int BOOL;
 typedef uint16_t nodenum_t;
 typedef uint16_t transnum_t;
 typedef uint16_t count_t;
-typedef uint8_t state_t;
 
 /************************************************************
  *
@@ -393,6 +392,12 @@ addNodeToGroup(nodenum_t i)
 		addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
+
+typedef struct {
+	BOOL value:1;
+	BOOL floating:1;
+} state_t;
+
 /*
  * 1. if the group is connected to GND, it's 0
  * 2. if the group is connected to VCC, it's 1
@@ -402,39 +407,42 @@ addNodeToGroup(nodenum_t i)
  * 6. otherwise, it's 0/floating (if there is a 0/floating node,
  *    which is always the case)
  */
-static inline void
-getNodeValue(BOOL *value, BOOL *floating)
+static inline state_t
+getNodeValue()
 {
+	state_t state = { .value = 0, .floating = 0 };
+
 	if (group_contains(vss)) {
-		*value = 0;
-		*floating = 0;
-		return;
+		state.value = 0;
+		state.floating = 0;
+		return state;
 	}
 
 	if (group_contains(vcc)) {
-		*value = 1;
-		*floating = 0;
-		return;
+		state.value = 1;
+		state.floating = 0;
+		return state;
 	}
 
-	*value = 0;
-	*floating = 1;
+	state.value = 0;
+	state.floating = 1;
 
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
 		if (get_nodes_pullup(nn)) {
-			*value = 1;
-			*floating = 0;
-			return;
+			state.value = 1;
+			state.floating = 0;
+			return state;
 		}
 		if (get_nodes_pulldown(nn)) {
-			*value = 0;
-			*floating = 0;
-			return;
+			state.value = 0;
+			state.floating = 0;
+			return state;
 		}
 		if (get_nodes_state_value(nn) && get_nodes_state_floating(nn))
-			*value = 1;
+			state.value = 1;
 	}
+	return state;
 }
 
 void
@@ -509,8 +517,8 @@ recalcNode(nodenum_t node)
 	addNodeToGroup(node);
 
 	/* get the state of the group */
-	BOOL newv_value, newv_floating;
-	getNodeValue(&newv_value, &newv_floating);
+	state_t newv = getNodeValue();
+
 	/*
 	 * now all nodes in this group are in this state,
 	 * - all transistors switched by nodes the group
@@ -520,9 +528,9 @@ recalcNode(nodenum_t node)
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		BOOL needs_recalc = get_nodes_state_value(nn) != newv_value;
-		set_nodes_state_value(nn, newv_value);
-		set_nodes_state_floating(nn, newv_floating);
+		BOOL needs_recalc = get_nodes_state_value(nn) != newv.value;
+		set_nodes_state_value(nn, newv.value);
+		set_nodes_state_floating(nn, newv.floating);
 		if (needs_recalc)
 			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
 				toggleTransistor(nodes_gates[nn][t]);
