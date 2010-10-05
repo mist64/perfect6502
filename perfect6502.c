@@ -419,12 +419,8 @@ getGroupValue()
 void
 addRecalcNode(nodenum_t nn)
 {
-	/* we already know about this node */
-	if (listout_contains(nn))
-		return;
-
-	/* add node to list */
-	listout_add(nn);
+	if (!listout_contains(nn))
+		listout_add(nn);
 }
 
 #ifdef BROKEN_TRANSISTORS
@@ -434,21 +430,14 @@ transnum_t broken_transistor = (transnum_t)-1;
 void
 toggleTransistor(transnum_t tn)
 {
-	/* if the gate is high, the transistor should be on */
-#if 0 /* safer version: set it to what the gate says */
-	BOOL on = isNodeHigh(transistors_gate[tn]);
-#else /* easier version: toggle it */
-	BOOL on = !get_transistors_on(tn);
-#endif
-
 #ifdef BROKEN_TRANSISTORS
 	if (tn == broken_transistor) {
-		if (!on)
+		if (!get_transistors_on(tn))
 			return;
 	}
 #endif
 
-	set_transistors_on(tn, on);
+	set_transistors_on(tn, !get_transistors_on(tn));
 
 	/* next time, we'll have to look at both nodes behind the transistor */
 	addRecalcNode(transistors_c1[tn]);
@@ -478,11 +467,11 @@ recalcNode(nodenum_t node)
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		BOOL needs_recalc = get_nodes_state_value(nn) != newv;
-		set_nodes_state_value(nn, newv);
-		if (needs_recalc)
+		if (get_nodes_state_value(nn) != newv) {
+			set_nodes_state_value(nn, newv);
 			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
 				toggleTransistor(nodes_gates[nn][t]);
+		}
 	}
 }
 
@@ -490,22 +479,15 @@ recalcNode(nodenum_t node)
  * NOTE: "list" as provided by the caller must
  * at least be able to hold NODES elements!
  */
-//int highest = 0;
 void
 recalcNodeList(const nodenum_t *source, count_t count)
 {
 	listin_fill(source, count);
 
-//	static int highest = 0;
 	int j;
 	for (j = 0; j < 100; j++) {	/* loop limiter */
-		if (!listin_count()) {
-//			if (j > highest) {
-//				highest = j;
-//				printf("******* NEW HIGHEST ***** %d\n", highest);
-//			}
-//			break;
-		}
+		if (!listin_count())
+			break;
 
 		listout_clear();
 
