@@ -117,7 +117,7 @@ get_bitmap(bitmap_t *bitmap, int index)
 /* everything that describes a node */
 DECLARE_BITMAP(nodes_pullup, NODES);
 DECLARE_BITMAP(nodes_pulldown, NODES);
-DECLARE_BITMAP(nodes_state_value, NODES);
+DECLARE_BITMAP(nodes_value, NODES);
 nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
@@ -153,15 +153,15 @@ get_nodes_pulldown(transnum_t t)
 }
 
 static inline void
-set_nodes_state_value(transnum_t t, BOOL state)
+set_nodes_value(transnum_t t, BOOL state)
 {
-	set_bitmap(nodes_state_value, t, state);
+	set_bitmap(nodes_value, t, state);
 }
 
 static inline BOOL
-get_nodes_state_value(transnum_t t)
+get_nodes_value(transnum_t t)
 {
-	return get_bitmap(nodes_state_value, t);
+	return get_bitmap(nodes_value, t);
 }
 
 /************************************************************
@@ -305,7 +305,7 @@ group_add(nodenum_t i)
 		group_contains_pullup = YES;
 	if (get_nodes_pulldown(i))
 		group_contains_pulldown = YES;
-	if (get_nodes_state_value(i))
+	if (get_nodes_value(i))
 		group_contains_hi = YES;
 }
 
@@ -358,7 +358,7 @@ setHigh(nodenum_t nn)
 static inline BOOL
 isNodeHigh(nodenum_t nn)
 {
-	return get_nodes_state_value(nn);
+	return get_nodes_value(nn);
 }
 
 /************************************************************
@@ -467,8 +467,8 @@ recalcNode(nodenum_t node)
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
-		if (get_nodes_state_value(nn) != newv) {
-			set_nodes_state_value(nn, newv);
+		if (get_nodes_value(nn) != newv) {
+			set_nodes_value(nn, newv);
 			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
 				toggleTransistor(nodes_gates[nn][t]);
 		}
@@ -822,7 +822,7 @@ resetChip()
 {
 	/* all nodes are down */
 	for (nodenum_t nn = 0; nn < NODES; nn++) {
-		set_nodes_state_value(nn, 0);
+		set_nodes_value(nn, 0);
 	}
 	/* all transistors are off */
 	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
