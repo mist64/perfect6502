@@ -34,6 +34,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "perfect6502.h"
+
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int BOOL;
@@ -428,7 +430,7 @@ getGroupValue()
 }
 
 #ifdef BROKEN_TRANSISTORS
-transnum_t broken_transistor = (transnum_t)-1;
+unsigned int broken_transistor = (unsigned int)-1;
 #endif
 
 void
@@ -719,7 +721,7 @@ step()
  *
  ************************************************************/
 
-count_t transistors;
+unsigned int transistors;
 
 void
 setupNodesAndTransistors()
@@ -820,7 +822,6 @@ void handle_monitor();
 
 #ifdef TEST
 #elif defined(BROKEN_TRANSISTORS)
-#include "broken_transistors.c"
 #elif defined(COMPARE)
 #include "compare.c"
 #else
