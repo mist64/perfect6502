@@ -819,22 +819,4 @@ void handle_monitor();
 #elif defined(COMPARE)
 #include "compare.c"
 #else
-int
-main()
-{
-	initAndResetChip();
-
-	/* set up memory for user program */
-	init_monitor();
-
-	/* emulate the 6502! */
-	for (;;) {
-		step();
-		if (isNodeHigh(clk0))
-			handle_monitor();
-
-		chipStatus();
-		//if (!(cycle % 1000)) printf("%d\n", cycle);
-	};
-}
 #endif
