@@ -1,16 +1,8 @@
 #include <stdio.h>
 
 #include "perfect6502.h"
-
-extern unsigned char memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
-
-extern unsigned short readPC();
-extern unsigned char readA();
-extern unsigned char readX();
-extern unsigned char readY();
-extern unsigned char readSP();
-extern unsigned char readP();
-
+/* XXX hook up memory[] with RAM[] in runtime.c */
+ 
 /************************************************************
  *
  * Interface to OS Library Code / Monitor

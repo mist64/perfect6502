@@ -625,9 +625,9 @@ readP()
 }
 
 uint8_t
-readNOTIR()
+readIR()
 {
-	return read8(notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7);
+	return ((uint8_t)read8(notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7)) ^ 0xFF;
 }
 
 uint8_t
@@ -654,7 +654,13 @@ readPC()
 	return (readPCH() << 8) | readPCL();
 }
 
-static int cycle;
+BOOL
+readRW()
+{
+	return isNodeHigh(rw);
+}
+
+unsigned int cycle;
 
 void
 chipStatus()
@@ -676,7 +682,7 @@ chipStatus()
 			readY(),
 			readSP(),
 			readP(),
-			readNOTIR() ^ 0xFF);
+			readIR());
 
 	if (clk)
 		if (r_w)
@@ -813,7 +819,6 @@ void init_monitor();
 void handle_monitor();
 
 #ifdef TEST
-#include "test.c"
 #elif defined(BROKEN_TRANSISTORS)
 #include "broken_transistors.c"
 #elif defined(COMPARE)

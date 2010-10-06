@@ -1,3 +1,16 @@
+#include <stdio.h>
+#include <strings.h>
+
+#include "perfect6502.h"
+
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned int BOOL;
+
+extern uint8_t memory[65536];
+
+#define YES 1
+#define NO 0
 
 #define BRK_LENGTH 2 /* BRK pushes PC + 2 onto the stack */
 
@@ -13,8 +26,8 @@
 #define X_OFFSET 5
 #define Y_OFFSET 10
 
-#define IS_READ_CYCLE (isNodeHigh(clk0) && isNodeHigh(rw))
-#define IS_WRITE_CYCLE (isNodeHigh(clk0) && !isNodeHigh(rw))
+#define IS_READ_CYCLE ((cycle & 1) && readRW())
+#define IS_WRITE_CYCLE ((cycle & 1) && !readRW())
 #define IS_READING(a) (IS_READ_CYCLE && readAddressBus() == (a))
 
 struct {
@@ -111,10 +124,7 @@ resetChip_test()
 int
 main()
 {
-	/* set up data structures for efficient emulation */
-	setupNodesAndTransistors();
-
-	verbose = 0;
+	initAndResetChip();
 
 	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
@@ -147,10 +157,15 @@ main()
 			resetChip_test();
 			for (i = 0; i < MAX_CYCLES; i++) {
 				step();
-				if ((readNOTIR() ^ 0xFF) == 0x00)
+//				chipStatus();
+//printf("cycle = %d  %x\n", cycle, readIR());
+				if (readIR() == 0x00)
 					break;
 			};
-			data[opcode].cycles = (cycle - 1) / 2;
+			if (cycle)
+				data[opcode].cycles = cycle / 2;
+			else
+				data[opcode].cycles = 0;
 
 			/**************************************************
 			 * find out zp or abs reads
