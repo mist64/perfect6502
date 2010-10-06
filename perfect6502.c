@@ -38,8 +38,8 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int BOOL;
 
-#define NO 0
 #define YES 1
+#define NO 0
 
 /************************************************************
  *
@@ -55,8 +55,8 @@ typedef unsigned int BOOL;
 #include "nodenames.h"
 
 /* the 6502 consists of this many nodes and transistors */
-#define NODES 1725
-#define TRANSISTORS 3510
+#define NODES (sizeof(segdefs)/sizeof(*segdefs))
+#define TRANSISTORS (sizeof(transdefs)/sizeof(*transdefs))
 
 /************************************************************
  *
@@ -75,7 +75,7 @@ typedef uint16_t count_t;
  *
  ************************************************************/
 
-#if 1 /* on 64 bit CPUs */
+#if 0 /* on 64 bit CPUs */
 typedef unsigned long long bitmap_t;
 #define BITMAP_SHIFT 6
 #define BITMAP_MASK 63
@@ -85,12 +85,15 @@ typedef unsigned int bitmap_t;
 #define BITMAP_MASK 31
 #endif
 
-#define DECLARE_BITMAP(name, count) bitmap_t name[count/sizeof(bitmap_t)+1]
+#define BITMAP_BITS_PER_WORD (sizeof(bitmap_t) * 8)
+#define WORDS_FOR_BITS(a) (a/BITMAP_BITS_PER_WORD+1)
+
+#define DECLARE_BITMAP(name, count) bitmap_t name[WORDS_FOR_BITS(count)]
 
 static inline void
 bitmap_clear(bitmap_t *bitmap, count_t count)
 {
-	bzero(bitmap, count/sizeof(bitmap_t)+1);
+	bzero(bitmap, WORDS_FOR_BITS(count)*sizeof(bitmap_t));
 }
 
 static inline void
@@ -774,14 +777,14 @@ setupNodesAndTransistors()
 {
 	count_t i;
 	/* copy nodes into r/w data structure */
-	for (i = 0; i < sizeof(segdefs)/sizeof(*segdefs); i++) {
+	for (i = 0; i < NODES; i++) {
 		set_nodes_pullup(i, segdefs[i] == 1);
 		nodes_gatecount[i] = 0;
 		nodes_c1c2count[i] = 0;
 	}
 	/* copy transistors into r/w data structure */
 	count_t j = 0;
-	for (i = 0; i < sizeof(transdefs)/sizeof(*transdefs); i++) {
+	for (i = 0; i < TRANSISTORS; i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
