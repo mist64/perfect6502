@@ -597,109 +597,55 @@ handleMemory()
  * Tracing/Debugging
  *
  ************************************************************/
- 
+
+#define read8(n0,n1,n2,n3,n4,n5,n6,n7) (isNodeHigh(n0) << 0) | (isNodeHigh(n1) << 1) | (isNodeHigh(n2) << 2) | (isNodeHigh(n3) << 3) | (isNodeHigh(n4) << 4) | (isNodeHigh(n5) << 5) | (isNodeHigh(n6) << 6) | (isNodeHigh(n7) << 7)
+
 uint8_t
 readA()
 {
-	return (isNodeHigh(a0) << 0) | 
-           (isNodeHigh(a1) << 1) | 
-           (isNodeHigh(a2) << 2) | 
-           (isNodeHigh(a3) << 3) | 
-           (isNodeHigh(a4) << 4) | 
-           (isNodeHigh(a5) << 5) | 
-           (isNodeHigh(a6) << 6) | 
-           (isNodeHigh(a7) << 7);
+	return read8(a0,a1,a2,a3,a4,a5,a6,a7);
 }
 
 uint8_t
 readX()
 {
-	return (isNodeHigh(x0) << 0) | 
-           (isNodeHigh(x1) << 1) | 
-           (isNodeHigh(x2) << 2) | 
-           (isNodeHigh(x3) << 3) | 
-           (isNodeHigh(x4) << 4) | 
-           (isNodeHigh(x5) << 5) | 
-           (isNodeHigh(x6) << 6) | 
-           (isNodeHigh(x7) << 7);
+	return read8(x0,x1,x2,x3,x4,x5,x6,x7);
 }
 
 uint8_t
 readY()
 {
-	return (isNodeHigh(y0) << 0) | 
-           (isNodeHigh(y1) << 1) | 
-           (isNodeHigh(y2) << 2) | 
-           (isNodeHigh(y3) << 3) | 
-           (isNodeHigh(y4) << 4) | 
-           (isNodeHigh(y5) << 5) | 
-           (isNodeHigh(y6) << 6) | 
-           (isNodeHigh(y7) << 7);
+	return read8(y0,y1,y2,y3,y4,y5,y6,y7);
 }
 
 uint8_t
 readP()
 {
-	return (isNodeHigh(p0) << 0) | 
-           (isNodeHigh(p1) << 1) | 
-           (isNodeHigh(p2) << 2) | 
-           (isNodeHigh(p3) << 3) | 
-           (isNodeHigh(p4) << 4) | 
-           (isNodeHigh(p5) << 5) | 
-           (isNodeHigh(p6) << 6) | 
-           (isNodeHigh(p7) << 7);
+	return read8(p0,p1,p2,p3,p4,p5,p6,p7);
 }
 
 uint8_t
 readNOTIR()
 {
-	return (isNodeHigh(notir0) << 0) | 
-           (isNodeHigh(notir1) << 1) | 
-           (isNodeHigh(notir2) << 2) | 
-           (isNodeHigh(notir3) << 3) | 
-           (isNodeHigh(notir4) << 4) | 
-           (isNodeHigh(notir5) << 5) | 
-           (isNodeHigh(notir6) << 6) | 
-           (isNodeHigh(notir7) << 7);
+	return read8(notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7);
 }
 
 uint8_t
 readSP()
 {
-	return (isNodeHigh(s0) << 0) | 
-           (isNodeHigh(s1) << 1) | 
-           (isNodeHigh(s2) << 2) | 
-           (isNodeHigh(s3) << 3) | 
-           (isNodeHigh(s4) << 4) | 
-           (isNodeHigh(s5) << 5) | 
-           (isNodeHigh(s6) << 6) | 
-           (isNodeHigh(s7) << 7);
+	return read8(s0,s1,s2,s3,s4,s5,s6,s7);
 }
 
 uint8_t
 readPCL()
 {
-	return (isNodeHigh(pcl0) << 0) | 
-           (isNodeHigh(pcl1) << 1) | 
-           (isNodeHigh(pcl2) << 2) | 
-           (isNodeHigh(pcl3) << 3) | 
-           (isNodeHigh(pcl4) << 4) | 
-           (isNodeHigh(pcl5) << 5) | 
-           (isNodeHigh(pcl6) << 6) | 
-           (isNodeHigh(pcl7) << 7);
+	return read8(pcl0,pcl1,pcl2,pcl3,pcl4,pcl5,pcl6,pcl7);
 }
 
 uint8_t
 readPCH()
 {
-	return (isNodeHigh(pch0) << 0) | 
-           (isNodeHigh(pch1) << 1) | 
-           (isNodeHigh(pch2) << 2) | 
-           (isNodeHigh(pch3) << 3) | 
-           (isNodeHigh(pch4) << 4) | 
-           (isNodeHigh(pch5) << 5) | 
-           (isNodeHigh(pch6) << 6) | 
-           (isNodeHigh(pch7) << 7);
+	return read8(pch0,pch1,pch2,pch3,pch4,pch5,pch6,pch7);
 }
 
 uint16_t
@@ -713,12 +659,17 @@ static int cycle;
 void
 chipStatus()
 {
+	BOOL clk = isNodeHigh(clk0);
+	uint16_t a = readAddressBus();
+	uint8_t d = readDataBus();
+	BOOL r_w = isNodeHigh(rw);
+
 	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X",
 			cycle,
-			isNodeHigh(clk0),
-			readAddressBus(),
-	        readDataBus(),
-	        isNodeHigh(rw),
+			clk,
+			a,
+	        d,
+	        r_w,
 			readPC(),
 			readA(),
 			readX(),
@@ -727,19 +678,12 @@ chipStatus()
 			readP(),
 			readNOTIR() ^ 0xFF);
 
-	BOOL clk = isNodeHigh(clk0);
-	uint16_t a = readAddressBus();
-	uint8_t d = readDataBus();
 	if (clk)
-		printf(" !");
-	else
-		printf("  ");
-	if (isNodeHigh(rw))
-		printf("R$%04X=$%02X\n", a, memory[a]);
-	else if (!isNodeHigh(rw))
-		printf("W$%04X=$%02X\n", a, d);
-	else
-		printf("\n");
+		if (r_w)
+			printf(" R$%04X=$%02X", a, memory[a]);
+		else
+			printf(" W$%04X=$%02X", a, d);
+	printf("\n");
 }
 
 /************************************************************
@@ -889,7 +833,7 @@ main()
 		if (isNodeHigh(clk0))
 			handle_monitor();
 
-		//chipStatus();
+		chipStatus();
 		//if (!(cycle % 1000)) printf("%d\n", cycle);
 	};
 }
