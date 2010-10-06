@@ -79,15 +79,15 @@ typedef uint16_t count_t;
 typedef unsigned long long bitmap_t;
 #define BITMAP_SHIFT 6
 #define BITMAP_MASK 63
+#define ONE 1ULL
 #else
 typedef unsigned int bitmap_t;
 #define BITMAP_SHIFT 5
 #define BITMAP_MASK 31
+#define ONE 1
 #endif
 
-#define BITMAP_BITS_PER_WORD (sizeof(bitmap_t) * 8)
-#define WORDS_FOR_BITS(a) (a/BITMAP_BITS_PER_WORD+1)
-
+#define WORDS_FOR_BITS(a) (a/(sizeof(bitmap_t) * 8)+1)
 #define DECLARE_BITMAP(name, count) bitmap_t name[WORDS_FOR_BITS(count)]
 
 static inline void
@@ -100,9 +100,9 @@ static inline void
 set_bitmap(bitmap_t *bitmap, int index, BOOL state)
 {
 	if (state)
-		bitmap[index>>BITMAP_SHIFT] |= 1ULL << (index & BITMAP_MASK);
+		bitmap[index>>BITMAP_SHIFT] |= ONE << (index & BITMAP_MASK);
 	else
-		bitmap[index>>BITMAP_SHIFT] &= ~(1ULL << (index & BITMAP_MASK));
+		bitmap[index>>BITMAP_SHIFT] &= ~(ONE << (index & BITMAP_MASK));
 }
 
 static inline BOOL
@@ -254,17 +254,19 @@ listout_clear()
 	bitmap_clear(listout.bitmap, NODES);
 }
 
-static inline void
-listout_add(nodenum_t i)
-{
-	listout.list[listout.count++] = i;
-	set_bitmap(listout.bitmap, i, 1);
-}
-
 static inline BOOL
 listout_contains(nodenum_t el)
 {
 	return get_bitmap(listout.bitmap, el);
+}
+
+static inline void
+listout_add(nodenum_t i)
+{
+	if (!listout_contains(i)) {
+		listout.list[listout.count++] = i;
+		set_bitmap(listout.bitmap, i, 1);
+	}
 }
 
 /************************************************************
@@ -400,6 +402,12 @@ addNodeToGroup(nodenum_t i)
 			addNodeTransistor(i, nodes_c1c2s[i][t]);
 }
 
+static inline void
+addAllNodesToGroup(node)
+{
+	group_clear();
+	addNodeToGroup(node);
+}
 
 static inline BOOL
 getGroupValue()
@@ -419,13 +427,6 @@ getGroupValue()
 	return group_contains_hi;
 }
 
-void
-addRecalcNode(nodenum_t nn)
-{
-	if (!listout_contains(nn))
-		listout_add(nn);
-}
-
 #ifdef BROKEN_TRANSISTORS
 transnum_t broken_transistor = (transnum_t)-1;
 #endif
@@ -439,34 +440,30 @@ toggleTransistor(transnum_t tn)
 			return;
 	}
 #endif
-
 	set_transistors_on(tn, !get_transistors_on(tn));
 
 	/* next time, we'll have to look at both nodes behind the transistor */
-	addRecalcNode(transistors_c1[tn]);
-	addRecalcNode(transistors_c2[tn]);
+	listout_add(transistors_c1[tn]);
+	listout_add(transistors_c2[tn]);
 }
 
 void
 recalcNode(nodenum_t node)
 {
-	group_clear();
-
 	/*
 	 * get all nodes that are connected through
 	 * transistors, starting with this one
 	 */
-	addNodeToGroup(node);
+	addAllNodesToGroup(node);
 
 	/* get the state of the group */
 	BOOL newv = getGroupValue();
 
 	/*
-	 * now all nodes in this group are in this state,
-	 * - all transistors switched by nodes the group
-	 *   need to be recalculated
-	 * - all nodes behind the transistor are collected
-	 *   and must be looked at in the next run
+	 * - set all nodes to the group state
+	 * - check all transistors switched by nodes of the group
+	 * - collect all nodes behind toggled transistors
+	 *   for the next run
 	 */
 	for (count_t i = 0; i < group_count(); i++) {
 		nodenum_t nn = group_get(i);
@@ -478,10 +475,6 @@ recalcNode(nodenum_t node)
 	}
 }
 
-/*
- * NOTE: "list" as provided by the caller must
- * at least be able to hold NODES elements!
- */
 void
 recalcNodeList(const nodenum_t *source, count_t count)
 {
@@ -528,7 +521,7 @@ recalcAllNodes()
  *
  ************************************************************/
 
-uint8_t memory[65536]; /* XXX must be hooked up with RAM[] in runtime.c */
+uint8_t memory[65536];
 
 /* the nodes that make the data bus */
 const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
@@ -537,8 +530,7 @@ void
 writeDataBus(uint8_t d)
 {
 	for (int i = 0; i < 8; i++) {
-		nodenum_t nn = dbnodes[i];
-		setNode(nn, d & 1);
+		setNode(dbnodes[i], d & 1);
 		d >>= 1;
 	}
 
@@ -589,6 +581,15 @@ void
 mWrite(uint16_t a, uint8_t d)
 {
 	memory[a] = d;
+}
+
+static inline void
+handleMemory()
+{
+	if (isNodeHigh(rw))
+		writeDataBus(mRead(readAddressBus()));
+	else
+		mWrite(readAddressBus(), readDataBus());
 }
 
 /************************************************************
@@ -756,10 +757,8 @@ step()
 	setNode(clk0, !clk);
 
 	/* handle memory reads and writes */
-	if (clk && isNodeHigh(rw))
-		writeDataBus(mRead(readAddressBus()));
-	if (!clk && !isNodeHigh(rw))
-		mWrite(readAddressBus(), readDataBus());
+	if (!clk)
+		handleMemory();
 
 	cycle++;
 }
@@ -832,7 +831,7 @@ resetChip()
 		set_transistors_on(tn, NO);
 
 	setLow(res);
-	setLow(clk0);
+	setHigh(clk0);
 	setHigh(rdy);
 	setLow(so);
 	setHigh(irq);
@@ -844,13 +843,20 @@ resetChip()
 	for (int i = 0; i < 16; i++)
 		step();
 
-	/* one more to get clk = 1 */
-	step();
-
 	/* release RESET */
 	setHigh(res);
 
 	cycle = 0;
+}
+
+void
+initAndResetChip()
+{
+	/* set up data structures for efficient emulation */
+	setupNodesAndTransistors();
+
+	/* set initial state of nodes, transistors, inputs; RESET chip */
+	resetChip();
 }
 
 /************************************************************
@@ -872,14 +878,10 @@ void handle_monitor();
 int
 main()
 {
-	/* set up data structures for efficient emulation */
-	setupNodesAndTransistors();
+	initAndResetChip();
 
 	/* set up memory for user program */
 	init_monitor();
-
-	/* set initial state of nodes, transistors, inputs; RESET chip */
-	resetChip();
 
 	/* emulate the 6502! */
 	for (;;) {
