@@ -20,10 +20,6 @@
  THE SOFTWARE.
 */
 
-//#define TEST
-//#define BROKEN_TRANSISTORS
-//#define COMPARE
-
 /************************************************************
  *
  * Libc Functions and Basic Data Types
@@ -810,19 +806,3 @@ initAndResetChip()
 	/* set initial state of nodes, transistors, inputs; RESET chip */
 	resetChip();
 }
-
-/************************************************************
- *
- * Main
- *
- ************************************************************/
-
-void init_monitor();
-void handle_monitor();
-
-#ifdef TEST
-#elif defined(BROKEN_TRANSISTORS)
-#elif defined(COMPARE)
-#include "compare.c"
-#else
-#endif

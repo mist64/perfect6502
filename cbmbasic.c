@@ -1,5 +1,8 @@
 #include "perfect6502.h"
 
+void init_monitor();
+void handle_monitor();
+
 int
 main()
 {
