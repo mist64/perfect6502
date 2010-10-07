@@ -207,23 +207,23 @@ get_transistors_on(transnum_t t)
 typedef struct {
 	nodenum_t *list;
 	count_t count;
-	bitmap_t *bitmap;
+//	bitmap_t *bitmap;
 } list_t;
 
 /* the nodes we are working with */
 nodenum_t list1[NODES];
-DECLARE_BITMAP(bitmap1, NODES);
+//DECLARE_BITMAP(bitmap1, NODES);
 list_t listin = {
 	.list = list1,
-	.bitmap = bitmap1
+//	.bitmap = bitmap1
 };
 
 /* the nodes we are collecting for the next run */
 nodenum_t list2[NODES];
-DECLARE_BITMAP(bitmap2, NODES);
+//DECLARE_BITMAP(bitmap2, NODES);
 list_t listout = {
 	.list = list2,
-	.bitmap = bitmap2
+//	.bitmap = bitmap2
 };
 
 static inline void
@@ -257,22 +257,24 @@ static inline void
 listout_clear()
 {
 	listout.count = 0;
-	bitmap_clear(listout.bitmap, NODES);
+//	bitmap_clear(listout.bitmap, NODES);
 }
 
-static inline BOOL
-listout_contains(nodenum_t el)
-{
-	return get_bitmap(listout.bitmap, el);
-}
+//static inline BOOL
+//listout_contains(nodenum_t el)
+//{
+//	return get_bitmap(listout.bitmap, el);
+//}
 
 static inline void
 listout_add(nodenum_t i)
 {
-	if (!listout_contains(i)) {
+//	if (!listout_contains(i)) {
 		listout.list[listout.count++] = i;
-		set_bitmap(listout.bitmap, i, 1);
-	}
+//		set_bitmap(listout.bitmap, i, 1);
+//	} else {
+//		printf("%d ", i);
+//	}
 }
 
 /************************************************************
@@ -292,18 +294,11 @@ static nodenum_t group[NODES];
 static count_t groupcount;
 DECLARE_BITMAP(groupbitmap, NODES);
 
-BOOL group_contains_pullup;
-BOOL group_contains_pulldown;
-BOOL group_contains_hi;
-
 static inline void
 group_clear()
 {
 	groupcount = 0;
 	bitmap_clear(groupbitmap, NODES);
-	group_contains_pullup = NO;
-	group_contains_pulldown = NO;
-	group_contains_hi = NO;
 }
 
 static inline void
@@ -311,13 +306,6 @@ group_add(nodenum_t i)
 {
 	group[groupcount++] = i;
 	set_bitmap(groupbitmap, i, 1);
-
-	if (get_nodes_pullup(i))
-		group_contains_pullup = YES;
-	if (get_nodes_pulldown(i))
-		group_contains_pulldown = YES;
-	if (get_nodes_value(i))
-		group_contains_hi = YES;
 }
 
 static inline nodenum_t
@@ -378,40 +366,51 @@ isNodeHigh(nodenum_t nn)
  *
  ************************************************************/
 
-void addNodeToGroup(nodenum_t i); /* recursion! */
+BOOL group_contains_pullup;
+BOOL group_contains_pulldown;
+BOOL group_contains_hi;
 
 void
-addNodeTransistor(nodenum_t node, transnum_t t)
+addNodeToGroup(nodenum_t n)
 {
-	/* if the transistor does not connect c1 and c2, we stop here */
-	if (!get_transistors_on(t))
+	if (group_contains(n))
 		return;
 
-	/* if original node was connected to c1, put c2 into list and vice versa */
-	if (transistors_c1[t] == node)
-		addNodeToGroup(transistors_c2[t]);
-	else
-		addNodeToGroup(transistors_c1[t]);
-}
+	group_add(n);
 
-void
-addNodeToGroup(nodenum_t i)
-{
-	if (group_contains(i))
+	if (get_nodes_pullup(n))
+		group_contains_pullup = YES;
+	if (get_nodes_pulldown(n))
+		group_contains_pulldown = YES;
+	if (get_nodes_value(n))
+		group_contains_hi = YES;
+
+	if (n == vss || n == vcc)
 		return;
-
-	group_add(i);
 
 	/* revisit all transistors that are controlled by this node */
-	if (i != vss && i != vcc)
-		for (count_t t = 0; t < nodes_c1c2count[i]; t++)
-			addNodeTransistor(i, nodes_c1c2s[i][t]);
+	for (count_t t = 0; t < nodes_c1c2count[n]; t++) {
+		transnum_t tn = nodes_c1c2s[n][t];
+		/* if the transistor connects c1 and c2... */
+		if (get_transistors_on(tn)) {
+			/* if original node was connected to c1, continue with c2 */
+			if (transistors_c1[tn] == n)
+				addNodeToGroup(transistors_c2[tn]);
+			else
+				addNodeToGroup(transistors_c1[tn]);
+		}
+	}
 }
 
 static inline void
 addAllNodesToGroup(node)
 {
 	group_clear();
+
+	group_contains_pullup = NO;
+	group_contains_pulldown = NO;
+	group_contains_hi = NO;
+
 	addNodeToGroup(node);
 }
 
@@ -470,10 +469,17 @@ printf("  %s node %d -> ", __func__, node);
 				transnum_t tn = nodes_gates[nn][t];
 				set_transistors_on(tn, !get_transistors_on(tn));
 			}
+#if 0
 			for (count_t g = 0; g < nodes_dependants[nn]; g++)
 				listout_add(nodes_dependant[nn][g]);
+#else
+			listout_add(nn | 0x8000);
+#endif
 		}
 	}
+#ifdef DEBUG
+	printf("(%d)\n", listout.count);
+#endif
 }
 
 void
@@ -498,8 +504,17 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 * all transistors controlled by this path, collecting
 		 * all nodes that changed because of it for the next run
 		 */
-		for (count_t i = 0; i < listin_count(); i++)
-			recalcNode(listin_get(i));
+		for (count_t i = 0; i < listin_count(); i++) {
+			nodenum_t n = listin_get(i);
+			if (n & 0x8000) {
+				n &= 0x7FFF;
+				for (count_t g = 0; g < nodes_dependants[n]; g++) {
+					recalcNode(nodes_dependant[n][g]);
+				}
+			} else {
+				recalcNode(listin_get(i));
+			}
+		}
 
 		/*
 		 * make the secondary list our primary list, use
