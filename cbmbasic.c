@@ -1,7 +1,6 @@
 #include "perfect6502.h"
-
-void init_monitor();
-void handle_monitor();
+#include "runtime.h"
+#include "runtime_init.h"
 
 int
 main()

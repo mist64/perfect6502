@@ -291,7 +291,7 @@ OPEN() {
         unsigned char savedbyte = RAM[kernal_filename+kernal_filename_len];
         const char* mode = kernal_sec == 0 ? "r" : "w";
         RAM[kernal_filename+kernal_filename_len] = 0;
-        kernal_files[kernal_lfn] = fopen(RAM+kernal_filename, mode);
+        kernal_files[kernal_lfn] = fopen((char*)(RAM+kernal_filename), mode);
         RAM[kernal_filename+kernal_filename_len] = savedbyte;
         if (kernal_files[kernal_lfn]) {
             kernal_files_next[kernal_lfn] = EOF;

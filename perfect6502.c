@@ -20,6 +20,8 @@
  THE SOFTWARE.
 */
 
+//#define DEBUG
+
 /************************************************************
  *
  * Libc Functions and Basic Data Types
@@ -432,6 +434,9 @@ unsigned int broken_transistor = (unsigned int)-1;
 void
 toggleTransistor(transnum_t tn)
 {
+#ifdef DEBUG
+	printf("   %s tn %d => %d--%d\n", __func__, tn, transistors_c1[tn], transistors_c2[tn]);
+#endif
 #ifdef BROKEN_TRANSISTORS
 	if (tn == broken_transistor) {
 		if (!get_transistors_on(tn))
@@ -453,6 +458,13 @@ recalcNode(nodenum_t node)
 	 * transistors, starting with this one
 	 */
 	addAllNodesToGroup(node);
+
+#ifdef DEBUG
+printf("  %s node %d -> ", __func__, node);
+	for (count_t j = 0; j < group_count(); j++)
+		printf("%d ", group_get(j));
+	printf("\n");
+#endif
 
 	/* get the state of the group */
 	BOOL newv = getGroupValue();
@@ -480,6 +492,9 @@ recalcNodeList(const nodenum_t *source, count_t count)
 
 	int j;
 	for (j = 0; j < 100; j++) {	/* loop limiter */
+#ifdef DEBUG
+		printf("%s iteration=%d, count=%d\n", __func__, j, listin_count());
+#endif
 		if (!listin_count())
 			break;
 
@@ -541,38 +556,18 @@ uint8_t mRead(uint16_t a)
 	return memory[a];
 }
 
+#define read8(n0,n1,n2,n3,n4,n5,n6,n7) ((uint8_t)(isNodeHigh(n0) << 0) | (isNodeHigh(n1) << 1) | (isNodeHigh(n2) << 2) | (isNodeHigh(n3) << 3) | (isNodeHigh(n4) << 4) | (isNodeHigh(n5) << 5) | (isNodeHigh(n6) << 6) | (isNodeHigh(n7) << 7))
+
 uint16_t
 readAddressBus()
 {
-	return (isNodeHigh(ab0) << 0) | 
-           (isNodeHigh(ab1) << 1) | 
-           (isNodeHigh(ab2) << 2) | 
-           (isNodeHigh(ab3) << 3) | 
-           (isNodeHigh(ab4) << 4) | 
-           (isNodeHigh(ab5) << 5) | 
-           (isNodeHigh(ab6) << 6) | 
-           (isNodeHigh(ab7) << 7) | 
-           (isNodeHigh(ab8) << 8) | 
-           (isNodeHigh(ab9) << 9) | 
-           (isNodeHigh(ab10) << 10) | 
-           (isNodeHigh(ab11) << 11) | 
-           (isNodeHigh(ab12) << 12) | 
-           (isNodeHigh(ab13) << 13) | 
-           (isNodeHigh(ab14) << 14) | 
-           (isNodeHigh(ab15) << 15); 
+	return read8(ab0,ab1,ab2,ab3,ab4,ab5,ab6,ab7) | (read8(ab8,ab9,ab10,ab11,ab12,ab13,ab14,ab15) << 8);
 }
 
 uint8_t
 readDataBus()
 {
-	return (isNodeHigh(db0) << 0) | 
-           (isNodeHigh(db1) << 1) | 
-           (isNodeHigh(db2) << 2) | 
-           (isNodeHigh(db3) << 3) | 
-           (isNodeHigh(db4) << 4) | 
-           (isNodeHigh(db5) << 5) | 
-           (isNodeHigh(db6) << 6) | 
-           (isNodeHigh(db7) << 7);
+	return read8(db0,db1,db2,db3,db4,db5,db6,db7);
 }
 
 void
@@ -595,8 +590,6 @@ handleMemory()
  * Tracing/Debugging
  *
  ************************************************************/
-
-#define read8(n0,n1,n2,n3,n4,n5,n6,n7) (isNodeHigh(n0) << 0) | (isNodeHigh(n1) << 1) | (isNodeHigh(n2) << 2) | (isNodeHigh(n3) << 3) | (isNodeHigh(n4) << 4) | (isNodeHigh(n5) << 5) | (isNodeHigh(n6) << 6) | (isNodeHigh(n7) << 7)
 
 uint8_t
 readA()
@@ -625,7 +618,7 @@ readP()
 uint8_t
 readIR()
 {
-	return ((uint8_t)read8(notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7)) ^ 0xFF;
+	return read8(notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7) ^ 0xFF;
 }
 
 uint8_t
@@ -709,6 +702,20 @@ step()
 		handleMemory();
 
 	cycle++;
+
+#if 0
+	int total = 0;
+	for (count_t i = 0; i < NODES; i++) {
+		addAllNodesToGroup(i);
+		printf("%d: ", i);
+		total += group_count();
+		for (count_t j = 0; j < group_count(); j++) {
+			printf("%d ", group_get(j));
+		}
+		printf("\n");
+	}
+	printf("TOTAL %f\n", ((float)total)/NODES);
+#endif
 }
 
 /************************************************************
@@ -740,8 +747,10 @@ setupNodesAndTransistors()
 #ifndef BROKEN_TRANSISTORS
 		for (count_t k = 0; k < i; k++) {
 			if (transdefs[k].gate == gate && 
-			    transdefs[k].c1 == c1 && 
-			    transdefs[k].c2 == c2) {
+			    ((transdefs[k].c1 == c1 && 
+			    transdefs[k].c2 == c2) ||
+			    (transdefs[k].c1 == c2 && 
+			    transdefs[k].c2 == c1))) {
 				found = YES;
 				break; 
 			}
@@ -755,6 +764,9 @@ setupNodesAndTransistors()
 		}
 	}
 	transistors = j;
+#ifdef DEBUG
+	printf("transistors: %d\n", transistors);
+#endif
 
 	/* cross reference transistors in nodes data structures */
 	for (i = 0; i < transistors; i++) {
@@ -765,6 +777,20 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
+
+
+#ifdef DEBUG
+	for (i = 0; i < NODES; i++) {
+		printf("%d: ", i);
+		int count = 0;
+		for (count_t g = 0; g < nodes_gatecount[i]; g++) {
+			transnum_t t = nodes_gates[i][g];
+			printf("%d/%d ", transistors_c1[t], transistors_c2[t]);
+			count += 2;
+		}
+		printf("(%d)\n", count);
+	}
+#endif
 }
 
 void
