@@ -125,6 +125,8 @@ nodenum_t nodes_gates[NODES][NODES];
 nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
+nodenum_t nodes_dependants[NODES];
+nodenum_t nodes_dependant[NODES][NODES];
 
 /*
  * The "value" propertiy of VCC and GND is never evaluated in the code,
@@ -182,6 +184,10 @@ DECLARE_BITMAP(transistors_on, TRANSISTORS);
 static inline void
 set_transistors_on(transnum_t t, BOOL state)
 {
+#ifdef BROKEN_TRANSISTORS
+	if (t == broken_transistor)
+		return;
+#endif
 	set_bitmap(transistors_on, t, state);
 }
 
@@ -432,25 +438,6 @@ unsigned int broken_transistor = (unsigned int)-1;
 #endif
 
 void
-toggleTransistor(transnum_t tn)
-{
-#ifdef DEBUG
-	printf("   %s tn %d => %d--%d\n", __func__, tn, transistors_c1[tn], transistors_c2[tn]);
-#endif
-#ifdef BROKEN_TRANSISTORS
-	if (tn == broken_transistor) {
-		if (!get_transistors_on(tn))
-			return;
-	}
-#endif
-	set_transistors_on(tn, !get_transistors_on(tn));
-
-	/* next time, we'll have to look at both nodes behind the transistor */
-	listout_add(transistors_c1[tn]);
-	listout_add(transistors_c2[tn]);
-}
-
-void
 recalcNode(nodenum_t node)
 {
 	/*
@@ -479,8 +466,12 @@ printf("  %s node %d -> ", __func__, node);
 		nodenum_t nn = group_get(i);
 		if (get_nodes_value(nn) != newv) {
 			set_nodes_value(nn, newv);
-			for (count_t t = 0; t < nodes_gatecount[nn]; t++)
-				toggleTransistor(nodes_gates[nn][t]);
+			for (count_t t = 0; t < nodes_gatecount[nn]; t++) {
+				transnum_t tn = nodes_gates[nn][t];
+				set_transistors_on(tn, !get_transistors_on(tn));
+			}
+			for (count_t g = 0; g < nodes_dependants[nn]; g++)
+				listout_add(nodes_dependant[nn][g]);
 		}
 	}
 }
@@ -726,6 +717,16 @@ step()
 
 unsigned int transistors;
 
+static inline void
+add_nodes_dependant(nodenum_t a, nodenum_t b)
+{
+	for (count_t g = 0; g < nodes_dependants[a]; g++)
+		if (nodes_dependant[a][g] == b)
+			return;
+
+	nodes_dependant[a][nodes_dependants[a]++] = b;
+}
+
 void
 setupNodesAndTransistors()
 {
@@ -778,17 +779,22 @@ setupNodesAndTransistors()
 		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
 	}
 
+	for (i = 0; i < NODES; i++) {
+		nodes_dependants[i] = 0;
+		for (count_t g = 0; g < nodes_gatecount[i]; g++) {
+			transnum_t t = nodes_gates[i][g];
+			add_nodes_dependant(i, transistors_c1[t]);
+			add_nodes_dependant(i, transistors_c2[t]);
+		}
+	}
 
 #ifdef DEBUG
 	for (i = 0; i < NODES; i++) {
 		printf("%d: ", i);
-		int count = 0;
-		for (count_t g = 0; g < nodes_gatecount[i]; g++) {
-			transnum_t t = nodes_gates[i][g];
-			printf("%d/%d ", transistors_c1[t], transistors_c2[t]);
-			count += 2;
+		for (count_t g = 0; g < nodes_dependants[i]; g++) {
+			printf("%d ", nodes_dependant[i][g]);
 		}
-		printf("(%d)\n", count);
+		printf("(%d)\n", nodes_dependants[i]);
 	}
 #endif
 }
