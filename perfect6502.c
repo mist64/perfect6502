@@ -207,31 +207,19 @@ get_transistors_on(transnum_t t)
 typedef struct {
 	nodenum_t *list;
 	count_t count;
-//	bitmap_t *bitmap;
 } list_t;
 
 /* the nodes we are working with */
 nodenum_t list1[NODES];
-//DECLARE_BITMAP(bitmap1, NODES);
 list_t listin = {
 	.list = list1,
-//	.bitmap = bitmap1
 };
 
 /* the nodes we are collecting for the next run */
 nodenum_t list2[NODES];
-//DECLARE_BITMAP(bitmap2, NODES);
 list_t listout = {
 	.list = list2,
-//	.bitmap = bitmap2
 };
-
-static inline void
-listin_fill(const nodenum_t *source, count_t count)
-{
-	bcopy(source, listin.list, count * sizeof(nodenum_t));
-	listin.count = count;
-}
 
 static inline nodenum_t
 listin_get(count_t i)
@@ -257,24 +245,12 @@ static inline void
 listout_clear()
 {
 	listout.count = 0;
-//	bitmap_clear(listout.bitmap, NODES);
 }
-
-//static inline BOOL
-//listout_contains(nodenum_t el)
-//{
-//	return get_bitmap(listout.bitmap, el);
-//}
 
 static inline void
 listout_add(nodenum_t i)
 {
-//	if (!listout_contains(i)) {
-		listout.list[listout.count++] = i;
-//		set_bitmap(listout.bitmap, i, 1);
-//	} else {
-//		printf("%d ", i);
-//	}
+	listout.list[listout.count++] = i;
 }
 
 /************************************************************
@@ -340,18 +316,6 @@ setNode(nodenum_t nn, BOOL state)
 	set_nodes_pullup(nn, state);
 	set_nodes_pulldown(nn, !state);
 	recalcNodeList(&nn, 1);
-}
-
-static inline void
-setLow(nodenum_t nn)
-{
-	setNode(nn, 0);
-}
-
-static inline void
-setHigh(nodenum_t nn)
-{
-	setNode(nn, 1);
 }
 
 static inline BOOL
@@ -473,7 +437,7 @@ printf("  %s node %d -> ", __func__, node);
 			for (count_t g = 0; g < nodes_dependants[nn]; g++)
 				listout_add(nodes_dependant[nn][g]);
 #else
-			listout_add(nn | 0x8000);
+			listout_add(nn);
 #endif
 		}
 	}
@@ -485,10 +449,14 @@ printf("  %s node %d -> ", __func__, node);
 void
 recalcNodeList(const nodenum_t *source, count_t count)
 {
-	listin_fill(source, count);
+	listout_clear();
 
-	int j;
-	for (j = 0; j < 100; j++) {	/* loop limiter */
+	for (count_t i = 0; i < count; i++)
+		recalcNode(source[i]);
+
+	lists_switch();
+
+	for (int j = 0; j < 100; j++) {	/* loop limiter */
 #ifdef DEBUG
 		printf("%s iteration=%d, count=%d\n", __func__, j, listin_count());
 #endif
@@ -506,16 +474,10 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 */
 		for (count_t i = 0; i < listin_count(); i++) {
 			nodenum_t n = listin_get(i);
-			if (n & 0x8000) {
-				n &= 0x7FFF;
-				for (count_t g = 0; g < nodes_dependants[n]; g++) {
-					recalcNode(nodes_dependant[n][g]);
-				}
-			} else {
-				recalcNode(listin_get(i));
+			for (count_t g = 0; g < nodes_dependants[n]; g++) {
+				recalcNode(nodes_dependant[n][g]);
 			}
 		}
-
 		/*
 		 * make the secondary list our primary list, use
 		 * the data storage of the primary list as the
@@ -825,12 +787,12 @@ resetChip()
 	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
 		set_transistors_on(tn, NO);
 
-	setLow(res);
-	setHigh(clk0);
-	setHigh(rdy);
-	setLow(so);
-	setHigh(irq);
-	setHigh(nmi);
+	setNode(res, 0);
+	setNode(clk0, 1);
+	setNode(rdy, 1);
+	setNode(so, 0);
+	setNode(irq, 1);
+	setNode(nmi, 1);
 
 	recalcAllNodes(); 
 
@@ -839,7 +801,7 @@ resetChip()
 		step();
 
 	/* release RESET */
-	setHigh(res);
+	setNode(res, 1);
 
 	cycle = 0;
 }
