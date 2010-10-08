@@ -32,8 +32,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <dispatch/dispatch.h>
-
 #include "perfect6502.h"
 
 typedef unsigned char uint8_t;
@@ -389,13 +387,6 @@ recalcNode(nodenum_t node)
 	 */
 	addAllNodesToGroup(node);
 
-#ifdef DEBUG
-printf("  %s node %d -> ", __func__, node);
-	for (count_t j = 0; j < group_count(); j++)
-		printf("%d ", group_get(j));
-	printf("\n");
-#endif
-
 	/* get the state of the group */
 	BOOL newv = getGroupValue();
 
@@ -429,9 +420,6 @@ recalcNodeList(const nodenum_t *source, count_t count)
 	lists_switch();
 
 	for (int j = 0; j < 100; j++) {	/* loop limiter */
-#ifdef DEBUG
-		printf("%s iteration=%d, count=%d\n", __func__, j, listin_count());
-#endif
 		if (!listin_count())
 			break;
 
@@ -446,20 +434,8 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 */
 		for (count_t i = 0; i < listin_count(); i++) {
 			nodenum_t n = listin_get(i);
-#ifdef DEBUG
-printf("libdispatch %d times\n", nodes_dependants[n]);
-#endif
-#if 1
-			for (count_t g = 0; g < nodes_dependants[n]; g++) {
-#else
-			dispatch_apply(nodes_dependants[n], dispatch_get_global_queue(0, 0), ^(size_t g) {
-#endif
+			for (count_t g = 0; g < nodes_dependants[n]; g++)
 				recalcNode(nodes_dependant[n][g]);
-			}
-#if 1
-#else
-);
-#endif
 		}
 		/*
 		 * make the secondary list our primary list, use
@@ -672,20 +648,6 @@ step()
 		handleMemory();
 
 	cycle++;
-
-#if 0
-	int total = 0;
-	for (count_t i = 0; i < NODES; i++) {
-		addAllNodesToGroup(i);
-		printf("%d: ", i);
-		total += group_count();
-		for (count_t j = 0; j < group_count(); j++) {
-			printf("%d ", group_get(j));
-		}
-		printf("\n");
-	}
-	printf("TOTAL %f\n", ((float)total)/NODES);
-#endif
 }
 
 /************************************************************
@@ -766,16 +728,6 @@ setupNodesAndTransistors()
 			add_nodes_dependant(i, transistors_c2[t]);
 		}
 	}
-
-#ifdef DEBUG
-	for (i = 0; i < NODES; i++) {
-		printf("%d: ", i);
-		for (count_t g = 0; g < nodes_dependants[i]; g++) {
-			printf("%d ", nodes_dependant[i][g]);
-		}
-		printf("(%d)\n", nodes_dependants[i]);
-	}
-#endif
 }
 
 void
