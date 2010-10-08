@@ -32,6 +32,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <dispatch/dispatch.h>
+
 #include "perfect6502.h"
 
 typedef unsigned char uint8_t;
@@ -181,6 +183,10 @@ nodenum_t transistors_c1[TRANSISTORS];
 nodenum_t transistors_c2[TRANSISTORS];
 DECLARE_BITMAP(transistors_on, TRANSISTORS);
 
+#ifdef BROKEN_TRANSISTORS
+unsigned int broken_transistor = (unsigned int)-1;
+#endif
+
 static inline void
 set_transistors_on(transnum_t t, BOOL state)
 {
@@ -215,7 +221,7 @@ list_t listin = {
 	.list = list1,
 };
 
-/* the nodes we are collecting for the next run */
+/* the indirect nodes we are collecting for the next run */
 nodenum_t list2[NODES];
 list_t listout = {
 	.list = list2,
@@ -304,28 +310,6 @@ group_count()
 
 /************************************************************
  *
- * Node State
- *
- ************************************************************/
-
-void recalcNodeList(const nodenum_t *source, count_t count);
-
-static inline void
-setNode(nodenum_t nn, BOOL state)
-{
-	set_nodes_pullup(nn, state);
-	set_nodes_pulldown(nn, !state);
-	recalcNodeList(&nn, 1);
-}
-
-static inline BOOL
-isNodeHigh(nodenum_t nn)
-{
-	return get_nodes_value(nn);
-}
-
-/************************************************************
- *
  * Node and Transistor Emulation
  *
  ************************************************************/
@@ -334,7 +318,7 @@ BOOL group_contains_pullup;
 BOOL group_contains_pulldown;
 BOOL group_contains_hi;
 
-void
+static void
 addNodeToGroup(nodenum_t n)
 {
 	if (group_contains(n))
@@ -396,10 +380,6 @@ getGroupValue()
 	return group_contains_hi;
 }
 
-#ifdef BROKEN_TRANSISTORS
-unsigned int broken_transistor = (unsigned int)-1;
-#endif
-
 void
 recalcNode(nodenum_t node)
 {
@@ -433,17 +413,9 @@ printf("  %s node %d -> ", __func__, node);
 				transnum_t tn = nodes_gates[nn][t];
 				set_transistors_on(tn, !get_transistors_on(tn));
 			}
-#if 0
-			for (count_t g = 0; g < nodes_dependants[nn]; g++)
-				listout_add(nodes_dependant[nn][g]);
-#else
 			listout_add(nn);
-#endif
 		}
 	}
-#ifdef DEBUG
-	printf("(%d)\n", listout.count);
-#endif
 }
 
 void
@@ -474,9 +446,20 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 */
 		for (count_t i = 0; i < listin_count(); i++) {
 			nodenum_t n = listin_get(i);
+#ifdef DEBUG
+printf("libdispatch %d times\n", nodes_dependants[n]);
+#endif
+#if 1
 			for (count_t g = 0; g < nodes_dependants[n]; g++) {
+#else
+			dispatch_apply(nodes_dependants[n], dispatch_get_global_queue(0, 0), ^(size_t g) {
+#endif
 				recalcNode(nodes_dependant[n][g]);
 			}
+#if 1
+#else
+);
+#endif
 		}
 		/*
 		 * make the secondary list our primary list, use
@@ -498,31 +481,29 @@ recalcAllNodes()
 
 /************************************************************
  *
- * Address Bus and Data Bus Interface
+ * Node State
  *
  ************************************************************/
 
-uint8_t memory[65536];
-
-/* the nodes that make the data bus */
-const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
-
-void
-writeDataBus(uint8_t d)
+static inline void
+setNode(nodenum_t nn, BOOL state)
 {
-	for (int i = 0; i < 8; i++) {
-		setNode(dbnodes[i], d & 1);
-		d >>= 1;
-	}
-
-	/* recalc all nodes connected starting from the data bus */
-	recalcNodeList(dbnodes, 8);
+	set_nodes_pullup(nn, state);
+	set_nodes_pulldown(nn, !state);
+	recalcNodeList(&nn, 1);
 }
 
-uint8_t mRead(uint16_t a)
+static inline BOOL
+isNodeHigh(nodenum_t nn)
 {
-	return memory[a];
+	return get_nodes_value(nn);
 }
+
+/************************************************************
+ *
+ * Interfacing and Extracting State
+ *
+ ************************************************************/
 
 #define read8(n0,n1,n2,n3,n4,n5,n6,n7) ((uint8_t)(isNodeHigh(n0) << 0) | (isNodeHigh(n1) << 1) | (isNodeHigh(n2) << 2) | (isNodeHigh(n3) << 3) | (isNodeHigh(n4) << 4) | (isNodeHigh(n5) << 5) | (isNodeHigh(n6) << 6) | (isNodeHigh(n7) << 7))
 
@@ -539,25 +520,18 @@ readDataBus()
 }
 
 void
-mWrite(uint16_t a, uint8_t d)
+writeDataBus(uint8_t d)
 {
-	memory[a] = d;
+	static const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
+	for (int i = 0; i < 8; i++, d>>=1)
+		setNode(dbnodes[i], d & 1);
 }
 
-static inline void
-handleMemory()
+BOOL
+readRW()
 {
-	if (isNodeHigh(rw))
-		writeDataBus(mRead(readAddressBus()));
-	else
-		mWrite(readAddressBus(), readDataBus());
+	return isNodeHigh(rw);
 }
-
-/************************************************************
- *
- * Tracing/Debugging
- *
- ************************************************************/
 
 uint8_t
 readA()
@@ -613,11 +587,11 @@ readPC()
 	return (readPCH() << 8) | readPCL();
 }
 
-BOOL
-readRW()
-{
-	return isNodeHigh(rw);
-}
+/************************************************************
+ *
+ * Tracing/Debugging
+ *
+ ************************************************************/
 
 unsigned int cycle;
 
@@ -649,6 +623,34 @@ chipStatus()
 		else
 			printf(" W$%04X=$%02X", a, d);
 	printf("\n");
+}
+
+/************************************************************
+ *
+ * Address Bus and Data Bus Interface
+ *
+ ************************************************************/
+
+uint8_t memory[65536];
+
+uint8_t mRead(uint16_t a)
+{
+	return memory[a];
+}
+
+void
+mWrite(uint16_t a, uint8_t d)
+{
+	memory[a] = d;
+}
+
+static inline void
+handleMemory()
+{
+	if (isNodeHigh(rw))
+		writeDataBus(mRead(readAddressBus()));
+	else
+		mWrite(readAddressBus(), readDataBus());
 }
 
 /************************************************************
