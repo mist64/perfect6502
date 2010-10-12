@@ -10,6 +10,7 @@ extern unsigned char readSP();
 extern unsigned char readP();
 extern unsigned int readRW();
 extern unsigned short readAddressBus();
+extern void writeDataBus(unsigned char);
 extern unsigned char readDataBus();
 extern unsigned char readIR();
 

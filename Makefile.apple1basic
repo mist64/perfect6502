@@ -1,0 +1,12 @@
+OBJS=perfect6502.o apple1basic.o 
+CFLAGS=-Werror -Wall -O3
+CC=clang
+
+all: apple1basic
+
+apple1basic: $(OBJS)
+	$(CC) -o apple1basic $(OBJS)
+
+clean:
+	rm -f $(OBJS) apple1basic
+
