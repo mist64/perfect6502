@@ -31,8 +31,8 @@ init_monitor()
 
 void
 charout(char ch) {
-	unsigned short S = readSP();
-	unsigned char a = 1 + memory[0x0100+S+1] | memory[0x0100+((S+2) & 0xFF)] << 8;
+	unsigned char S = readSP();
+	unsigned short a = 1 + memory[0x0100+S+1] | memory[0x0100+((S+2) & 0xFF)] << 8;
 
 	/*
 	 * Apple I BASIC prints every character received
@@ -125,7 +125,7 @@ main()
 		if (!clk)
 			handle_monitor();
 
-//		chipStatus();
+		chipStatus();
 		//if (!(cycle % 1000)) printf("%d\n", cycle);
 	};
 }
