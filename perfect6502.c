@@ -126,7 +126,9 @@ nodenum_t nodes_c1c2s[NODES][2*NODES];
 count_t nodes_gatecount[NODES];
 count_t nodes_c1c2count[NODES];
 nodenum_t nodes_dependants[NODES];
+nodenum_t nodes_left_dependants[NODES];
 nodenum_t nodes_dependant[NODES][NODES];
+nodenum_t nodes_left_dependant[NODES][NODES];
 
 /*
  * The "value" propertiy of VCC and GND is never evaluated in the code,
@@ -225,6 +227,8 @@ list_t listout = {
 	.list = list2,
 };
 
+DECLARE_BITMAP(listout_bitmap, NODES);
+
 static inline nodenum_t
 listin_get(count_t i)
 {
@@ -249,12 +253,16 @@ static inline void
 listout_clear()
 {
 	listout.count = 0;
+	bitmap_clear(listout_bitmap, NODES);
 }
 
 static inline void
 listout_add(nodenum_t i)
 {
-	listout.list[listout.count++] = i;
+	if (!get_bitmap(listout_bitmap, i)) {
+		listout.list[listout.count++] = i;
+		set_bitmap(listout_bitmap, i, 1);
+	}
 }
 
 /************************************************************
@@ -265,7 +273,7 @@ listout_add(nodenum_t i)
 
 /*
  * a group is a set of connected nodes, which consequently
- * share the same potential
+ * share the same value
  *
  * we use an array and a count for O(1) insert and
  * iteration, and a redundant bitmap for O(1) lookup
@@ -312,29 +320,49 @@ group_count()
  *
  ************************************************************/
 
-BOOL group_contains_pullup;
-BOOL group_contains_pulldown;
-BOOL group_contains_hi;
+enum {
+	contains_nothing,
+	contains_hi,
+	contains_pullup,
+	contains_pulldown,
+	contains_vcc,
+	contains_vss
+} group_contains_value;
 
 static void
 addNodeToGroup(nodenum_t n)
 {
+	/*
+	 * We need to stop at vss and vcc, otherwise we'll revisit other groups
+	 * with the same value - just because they all derive their value from
+	 * the fact that they are connected to vcc or vss.
+	 */
+	if (n == vss) {
+		group_contains_value = contains_vss;
+		return;
+	}
+	if (n == vcc) {
+		if (group_contains_value != contains_vss)
+			group_contains_value = contains_vcc;
+		return;
+	}
+
 	if (group_contains(n))
 		return;
 
 	group_add(n);
 
-	if (get_nodes_pullup(n))
-		group_contains_pullup = YES;
-	if (get_nodes_pulldown(n))
-		group_contains_pulldown = YES;
-	if (get_nodes_value(n))
-		group_contains_hi = YES;
+	if (group_contains_value < contains_pulldown && get_nodes_pulldown(n)) {
+		group_contains_value = contains_pulldown;
+	}
+	if (group_contains_value < contains_pullup && get_nodes_pullup(n)) {
+		group_contains_value = contains_pullup;
+	}
+	if (group_contains_value < contains_hi && get_nodes_value(n)) {
+		group_contains_value = contains_hi;
+	}
 
-	if (n == vss || n == vcc)
-		return;
-
-	/* revisit all transistors that are controlled by this node */
+	/* revisit all transistors that control this node */
 	for (count_t t = 0; t < nodes_c1c2count[n]; t++) {
 		transnum_t tn = nodes_c1c2s[n][t];
 		/* if the transistor connects c1 and c2... */
@@ -353,9 +381,7 @@ addAllNodesToGroup(node)
 {
 	group_clear();
 
-	group_contains_pullup = NO;
-	group_contains_pulldown = NO;
-	group_contains_hi = NO;
+	group_contains_value = contains_nothing;
 
 	addNodeToGroup(node);
 }
@@ -363,19 +389,16 @@ addAllNodesToGroup(node)
 static inline BOOL
 getGroupValue()
 {
-	if (group_contains(vss))
-		return NO;
-
-	if (group_contains(vcc))
-		return YES;
-
-	if (group_contains_pulldown)
-		return NO;
-
-	if (group_contains_pullup)
-		return YES;
-
-	return group_contains_hi;
+	switch (group_contains_value) {
+		case contains_vcc:
+		case contains_pullup:
+		case contains_hi:
+			return YES;
+		case contains_vss:
+		case contains_pulldown:
+		case contains_nothing:
+			return NO;
+	}
 }
 
 void
@@ -402,24 +425,33 @@ recalcNode(nodenum_t node)
 			set_nodes_value(nn, newv);
 			for (count_t t = 0; t < nodes_gatecount[nn]; t++) {
 				transnum_t tn = nodes_gates[nn][t];
-				set_transistors_on(tn, !get_transistors_on(tn));
+				set_transistors_on(tn, newv);
 			}
-			listout_add(nn);
+
+			if (newv) {
+				for (count_t g = 0; g < nodes_left_dependants[nn]; g++) {
+					listout_add(nodes_left_dependant[nn][g]);
+				}
+			} else {
+				for (count_t g = 0; g < nodes_dependants[nn]; g++) {
+					listout_add(nodes_dependant[nn][g]);
+				}
+			}
 		}
 	}
 }
 
 void
-recalcNodeList(const nodenum_t *source, count_t count)
+recalcNodeList()
 {
-	listout_clear();
-
-	for (count_t i = 0; i < count; i++)
-		recalcNode(source[i]);
-
-	lists_switch();
-
 	for (int j = 0; j < 100; j++) {	/* loop limiter */
+		/*
+		 * make the secondary list our primary list, use
+		 * the data storage of the primary list as the
+		 * secondary list
+		 */
+		lists_switch();
+
 		if (!listin_count())
 			break;
 
@@ -434,25 +466,10 @@ recalcNodeList(const nodenum_t *source, count_t count)
 		 */
 		for (count_t i = 0; i < listin_count(); i++) {
 			nodenum_t n = listin_get(i);
-			for (count_t g = 0; g < nodes_dependants[n]; g++)
-				recalcNode(nodes_dependant[n][g]);
+			recalcNode(n);
 		}
-		/*
-		 * make the secondary list our primary list, use
-		 * the data storage of the primary list as the
-		 * secondary list
-		 */
-		lists_switch();
 	}
-}
-
-void
-recalcAllNodes()
-{
-	nodenum_t temp[NODES];
-	for (count_t i = 0; i < NODES; i++)
-		temp[i] = i;
-	recalcNodeList(temp, NODES);
+	listout_clear();
 }
 
 /************************************************************
@@ -464,9 +481,12 @@ recalcAllNodes()
 static inline void
 setNode(nodenum_t nn, BOOL state)
 {
-	set_nodes_pullup(nn, state);
-	set_nodes_pulldown(nn, !state);
-	recalcNodeList(&nn, 1);
+	BOOL oldstate = get_nodes_pullup(nn);
+	if (state != oldstate) {
+		set_nodes_pullup(nn, state);
+		set_nodes_pulldown(nn, !state);
+		listout_add(nn);
+	}
 }
 
 static inline BOOL
@@ -593,11 +613,12 @@ chipStatus()
 			readP(),
 			readIR());
 
-	if (clk)
+	if (clk) {
 		if (r_w)
 			printf(" R$%04X=$%02X", a, memory[a]);
 		else
 			printf(" W$%04X=$%02X", a, d);
+	}
 	printf("\n");
 }
 
@@ -642,6 +663,7 @@ step()
 
 	/* invert clock */
 	setNode(clk0, !clk);
+	recalcNodeList();
 
 	/* handle memory reads and writes */
 	if (!clk)
@@ -666,6 +688,16 @@ add_nodes_dependant(nodenum_t a, nodenum_t b)
 			return;
 
 	nodes_dependant[a][nodes_dependants[a]++] = b;
+}
+
+static inline void
+add_nodes_left_dependant(nodenum_t a, nodenum_t b)
+{
+	for (count_t g = 0; g < nodes_left_dependants[a]; g++)
+		if (nodes_left_dependant[a][g] == b)
+			return;
+
+	nodes_left_dependant[a][nodes_left_dependants[a]++] = b;
 }
 
 void
@@ -722,10 +754,22 @@ setupNodesAndTransistors()
 
 	for (i = 0; i < NODES; i++) {
 		nodes_dependants[i] = 0;
+		nodes_left_dependants[i] = 0;
 		for (count_t g = 0; g < nodes_gatecount[i]; g++) {
 			transnum_t t = nodes_gates[i][g];
-			add_nodes_dependant(i, transistors_c1[t]);
-			add_nodes_dependant(i, transistors_c2[t]);
+			nodenum_t c1 = transistors_c1[t];
+			if (c1 != vss && c1 != vcc) {
+				add_nodes_dependant(i, c1);
+			}
+			nodenum_t c2 = transistors_c2[t];
+			if (c2 != vss && c2 != vcc) {
+				add_nodes_dependant(i, c2);
+			}
+			if (c1 != vss && c1 != vcc) {
+				add_nodes_left_dependant(i, c1);
+			} else {
+				add_nodes_left_dependant(i, c2);
+			}
 		}
 	}
 }
@@ -748,7 +792,10 @@ resetChip()
 	setNode(irq, 1);
 	setNode(nmi, 1);
 
-	recalcAllNodes(); 
+	for (count_t i = 0; i < NODES; i++)
+		listout_add(i);
+
+	recalcNodeList();
 
 	/* hold RESET for 8 cycles */
 	for (int i = 0; i < 16; i++)
@@ -756,6 +803,7 @@ resetChip()
 
 	/* release RESET */
 	setNode(res, 1);
+	recalcNodeList();
 
 	cycle = 0;
 }

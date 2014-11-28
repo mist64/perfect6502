@@ -12,7 +12,6 @@ typedef uint8_t step_t;
 
 static step_t t; /* step inside the instruction */
 static uint8_t ir; /* instruction register */
-static uint8_t operand;
 static uint16_t PC;
 static uint8_t A, X, Y, S, P;
 static uint8_t temp_lo, temp_hi;
