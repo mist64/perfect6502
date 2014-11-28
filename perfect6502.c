@@ -117,18 +117,57 @@ get_bitmap(bitmap_t *bitmap, int index)
  *
  ************************************************************/
 
-/* everything that describes a node */
-DECLARE_BITMAP(nodes_pullup, NODES);
-DECLARE_BITMAP(nodes_pulldown, NODES);
-DECLARE_BITMAP(nodes_value, NODES);
-nodenum_t nodes_gates[NODES][NODES];
-nodenum_t nodes_c1c2s[NODES][2*NODES];
-count_t nodes_gatecount[NODES];
-count_t nodes_c1c2count[NODES];
-nodenum_t nodes_dependants[NODES];
-nodenum_t nodes_left_dependants[NODES];
-nodenum_t nodes_dependant[NODES][NODES];
-nodenum_t nodes_left_dependant[NODES][NODES];
+/* list of nodes that need to be recalculated */
+typedef struct {
+	nodenum_t *list;
+	count_t count;
+} list_t;
+
+typedef struct {
+	/* everything that describes a node */
+	DECLARE_BITMAP(nodes_pullup, NODES);
+	DECLARE_BITMAP(nodes_pulldown, NODES);
+	DECLARE_BITMAP(nodes_value, NODES);
+	nodenum_t nodes_gates[NODES][NODES];
+	nodenum_t nodes_c1c2s[NODES][2*NODES];
+	count_t nodes_gatecount[NODES];
+	count_t nodes_c1c2count[NODES];
+	nodenum_t nodes_dependants[NODES];
+	nodenum_t nodes_left_dependants[NODES];
+	nodenum_t nodes_dependant[NODES][NODES];
+	nodenum_t nodes_left_dependant[NODES][NODES];
+
+	/* everything that describes a transistor */
+	nodenum_t transistors_gate[TRANSISTORS];
+	nodenum_t transistors_c1[TRANSISTORS];
+	nodenum_t transistors_c2[TRANSISTORS];
+	DECLARE_BITMAP(transistors_on, TRANSISTORS);
+
+	/* the nodes we are working with */
+	nodenum_t list1[NODES];
+	list_t listin;
+
+	/* the indirect nodes we are collecting for the next run */
+	nodenum_t list2[NODES];
+	list_t listout;
+
+	DECLARE_BITMAP(listout_bitmap, NODES);
+
+	nodenum_t group[NODES];
+	count_t groupcount;
+	DECLARE_BITMAP(groupbitmap, NODES);
+
+	enum {
+		contains_nothing,
+		contains_hi,
+		contains_pullup,
+		contains_pulldown,
+		contains_vcc,
+		contains_vss
+	} group_contains_value;
+} state_t;
+
+state_t state;
 
 /*
  * The "value" propertiy of VCC and GND is never evaluated in the code,
@@ -136,39 +175,39 @@ nodenum_t nodes_left_dependant[NODES][NODES];
  */
 
 static inline void
-set_nodes_pullup(transnum_t t, BOOL state)
+set_nodes_pullup(transnum_t t, BOOL s)
 {
-	set_bitmap(nodes_pullup, t, state);
+	set_bitmap(state.nodes_pullup, t, s);
 }
 
 static inline BOOL
 get_nodes_pullup(transnum_t t)
 {
-	return get_bitmap(nodes_pullup, t);
+	return get_bitmap(state.nodes_pullup, t);
 }
 
 static inline void
-set_nodes_pulldown(transnum_t t, BOOL state)
+set_nodes_pulldown(transnum_t t, BOOL s)
 {
-	set_bitmap(nodes_pulldown, t, state);
+	set_bitmap(state.nodes_pulldown, t, s);
 }
 
 static inline BOOL
 get_nodes_pulldown(transnum_t t)
 {
-	return get_bitmap(nodes_pulldown, t);
+	return get_bitmap(state.nodes_pulldown, t);
 }
 
 static inline void
-set_nodes_value(transnum_t t, BOOL state)
+set_nodes_value(transnum_t t, BOOL s)
 {
-	set_bitmap(nodes_value, t, state);
+	set_bitmap(state.nodes_value, t, s);
 }
 
 static inline BOOL
 get_nodes_value(transnum_t t)
 {
-	return get_bitmap(nodes_value, t);
+	return get_bitmap(state.nodes_value, t);
 }
 
 /************************************************************
@@ -177,30 +216,24 @@ get_nodes_value(transnum_t t)
  *
  ************************************************************/
 
-/* everything that describes a transistor */
-nodenum_t transistors_gate[TRANSISTORS];
-nodenum_t transistors_c1[TRANSISTORS];
-nodenum_t transistors_c2[TRANSISTORS];
-DECLARE_BITMAP(transistors_on, TRANSISTORS);
-
 #ifdef BROKEN_TRANSISTORS
 unsigned int broken_transistor = (unsigned int)-1;
 #endif
 
 static inline void
-set_transistors_on(transnum_t t, BOOL state)
+set_transistors_on(transnum_t t, BOOL s)
 {
 #ifdef BROKEN_TRANSISTORS
 	if (t == broken_transistor)
 		return;
 #endif
-	set_bitmap(transistors_on, t, state);
+	set_bitmap(state.transistors_on, t, s);
 }
 
 static inline BOOL
 get_transistors_on(transnum_t t)
 {
-	return get_bitmap(transistors_on, t);
+	return get_bitmap(state.transistors_on, t);
 }
 
 /************************************************************
@@ -209,59 +242,39 @@ get_transistors_on(transnum_t t)
  *
  ************************************************************/
 
-/* list of nodes that need to be recalculated */
-typedef struct {
-	nodenum_t *list;
-	count_t count;
-} list_t;
-
-/* the nodes we are working with */
-nodenum_t list1[NODES];
-list_t listin = {
-	.list = list1,
-};
-
-/* the indirect nodes we are collecting for the next run */
-nodenum_t list2[NODES];
-list_t listout = {
-	.list = list2,
-};
-
-DECLARE_BITMAP(listout_bitmap, NODES);
-
 static inline nodenum_t
 listin_get(count_t i)
 {
-	return listin.list[i];
+	return state.listin.list[i];
 }
 
 static inline count_t
 listin_count()
 {
-	return listin.count;
+	return state.listin.count;
 }
 
 static inline void
 lists_switch()
 {
-	list_t tmp = listin;
-	listin = listout;
-	listout = tmp;
+	list_t tmp = state.listin;
+	state.listin = state.listout;
+	state.listout = tmp;
 }
 
 static inline void
 listout_clear()
 {
-	listout.count = 0;
-	bitmap_clear(listout_bitmap, NODES);
+	state.listout.count = 0;
+	bitmap_clear(state.listout_bitmap, NODES);
 }
 
 static inline void
 listout_add(nodenum_t i)
 {
-	if (!get_bitmap(listout_bitmap, i)) {
-		listout.list[listout.count++] = i;
-		set_bitmap(listout_bitmap, i, 1);
+	if (!get_bitmap(state.listout_bitmap, i)) {
+		state.listout.list[state.listout.count++] = i;
+		set_bitmap(state.listout_bitmap, i, 1);
 	}
 }
 
@@ -278,40 +291,37 @@ listout_add(nodenum_t i)
  * we use an array and a count for O(1) insert and
  * iteration, and a redundant bitmap for O(1) lookup
  */
-static nodenum_t group[NODES];
-static count_t groupcount;
-DECLARE_BITMAP(groupbitmap, NODES);
 
 static inline void
 group_clear()
 {
-	groupcount = 0;
-	bitmap_clear(groupbitmap, NODES);
+	state.groupcount = 0;
+	bitmap_clear(state.groupbitmap, NODES);
 }
 
 static inline void
 group_add(nodenum_t i)
 {
-	group[groupcount++] = i;
-	set_bitmap(groupbitmap, i, 1);
+	state.group[state.groupcount++] = i;
+	set_bitmap(state.groupbitmap, i, 1);
 }
 
 static inline nodenum_t
 group_get(count_t n)
 {
-	return group[n];
+	return state.group[n];
 }
 
 static inline BOOL
 group_contains(nodenum_t el)
 {
-	return get_bitmap(groupbitmap, el);
+	return get_bitmap(state.groupbitmap, el);
 }
 
 static inline count_t
 group_count()
 {
-	return groupcount;
+	return state.groupcount;
 }
 
 /************************************************************
@@ -319,15 +329,6 @@ group_count()
  * Node and Transistor Emulation
  *
  ************************************************************/
-
-enum {
-	contains_nothing,
-	contains_hi,
-	contains_pullup,
-	contains_pulldown,
-	contains_vcc,
-	contains_vss
-} group_contains_value;
 
 static void
 addNodeToGroup(nodenum_t n)
@@ -338,12 +339,12 @@ addNodeToGroup(nodenum_t n)
 	 * the fact that they are connected to vcc or vss.
 	 */
 	if (n == vss) {
-		group_contains_value = contains_vss;
+		state.group_contains_value = contains_vss;
 		return;
 	}
 	if (n == vcc) {
-		if (group_contains_value != contains_vss)
-			group_contains_value = contains_vcc;
+		if (state.group_contains_value != contains_vss)
+			state.group_contains_value = contains_vcc;
 		return;
 	}
 
@@ -352,26 +353,26 @@ addNodeToGroup(nodenum_t n)
 
 	group_add(n);
 
-	if (group_contains_value < contains_pulldown && get_nodes_pulldown(n)) {
-		group_contains_value = contains_pulldown;
+	if (state.group_contains_value < contains_pulldown && get_nodes_pulldown(n)) {
+		state.group_contains_value = contains_pulldown;
 	}
-	if (group_contains_value < contains_pullup && get_nodes_pullup(n)) {
-		group_contains_value = contains_pullup;
+	if (state.group_contains_value < contains_pullup && get_nodes_pullup(n)) {
+		state.group_contains_value = contains_pullup;
 	}
-	if (group_contains_value < contains_hi && get_nodes_value(n)) {
-		group_contains_value = contains_hi;
+	if (state.group_contains_value < contains_hi && get_nodes_value(n)) {
+		state.group_contains_value = contains_hi;
 	}
 
 	/* revisit all transistors that control this node */
-	for (count_t t = 0; t < nodes_c1c2count[n]; t++) {
-		transnum_t tn = nodes_c1c2s[n][t];
+	for (count_t t = 0; t < state.nodes_c1c2count[n]; t++) {
+		transnum_t tn = state.nodes_c1c2s[n][t];
 		/* if the transistor connects c1 and c2... */
 		if (get_transistors_on(tn)) {
 			/* if original node was connected to c1, continue with c2 */
-			if (transistors_c1[tn] == n)
-				addNodeToGroup(transistors_c2[tn]);
+			if (state.transistors_c1[tn] == n)
+				addNodeToGroup(state.transistors_c2[tn]);
 			else
-				addNodeToGroup(transistors_c1[tn]);
+				addNodeToGroup(state.transistors_c1[tn]);
 		}
 	}
 }
@@ -381,7 +382,7 @@ addAllNodesToGroup(node)
 {
 	group_clear();
 
-	group_contains_value = contains_nothing;
+	state.group_contains_value = contains_nothing;
 
 	addNodeToGroup(node);
 }
@@ -389,7 +390,7 @@ addAllNodesToGroup(node)
 static inline BOOL
 getGroupValue()
 {
-	switch (group_contains_value) {
+	switch (state.group_contains_value) {
 		case contains_vcc:
 		case contains_pullup:
 		case contains_hi:
@@ -423,18 +424,18 @@ recalcNode(nodenum_t node)
 		nodenum_t nn = group_get(i);
 		if (get_nodes_value(nn) != newv) {
 			set_nodes_value(nn, newv);
-			for (count_t t = 0; t < nodes_gatecount[nn]; t++) {
-				transnum_t tn = nodes_gates[nn][t];
+			for (count_t t = 0; t < state.nodes_gatecount[nn]; t++) {
+				transnum_t tn = state.nodes_gates[nn][t];
 				set_transistors_on(tn, newv);
 			}
 
 			if (newv) {
-				for (count_t g = 0; g < nodes_left_dependants[nn]; g++) {
-					listout_add(nodes_left_dependant[nn][g]);
+				for (count_t g = 0; g < state.nodes_left_dependants[nn]; g++) {
+					listout_add(state.nodes_left_dependant[nn][g]);
 				}
 			} else {
-				for (count_t g = 0; g < nodes_dependants[nn]; g++) {
-					listout_add(nodes_dependant[nn][g]);
+				for (count_t g = 0; g < state.nodes_dependants[nn]; g++) {
+					listout_add(state.nodes_dependant[nn][g]);
 				}
 			}
 		}
@@ -683,21 +684,21 @@ unsigned int transistors;
 static inline void
 add_nodes_dependant(nodenum_t a, nodenum_t b)
 {
-	for (count_t g = 0; g < nodes_dependants[a]; g++)
-		if (nodes_dependant[a][g] == b)
+	for (count_t g = 0; g < state.nodes_dependants[a]; g++)
+		if (state.nodes_dependant[a][g] == b)
 			return;
 
-	nodes_dependant[a][nodes_dependants[a]++] = b;
+	state.nodes_dependant[a][state.nodes_dependants[a]++] = b;
 }
 
 static inline void
 add_nodes_left_dependant(nodenum_t a, nodenum_t b)
 {
-	for (count_t g = 0; g < nodes_left_dependants[a]; g++)
-		if (nodes_left_dependant[a][g] == b)
+	for (count_t g = 0; g < state.nodes_left_dependants[a]; g++)
+		if (state.nodes_left_dependant[a][g] == b)
 			return;
 
-	nodes_left_dependant[a][nodes_left_dependants[a]++] = b;
+	state.nodes_left_dependant[a][state.nodes_left_dependants[a]++] = b;
 }
 
 void
@@ -707,8 +708,8 @@ setupNodesAndTransistors()
 	/* copy nodes into r/w data structure */
 	for (i = 0; i < NODES; i++) {
 		set_nodes_pullup(i, segdefs[i] == 1);
-		nodes_gatecount[i] = 0;
-		nodes_c1c2count[i] = 0;
+		state.nodes_gatecount[i] = 0;
+		state.nodes_c1c2count[i] = 0;
 	}
 	/* copy transistors into r/w data structure */
 	count_t j = 0;
@@ -731,9 +732,9 @@ setupNodesAndTransistors()
 		}
 #endif
 		if (!found) {
-			transistors_gate[j] = gate;
-			transistors_c1[j] = c1;
-			transistors_c2[j] = c2;
+			state.transistors_gate[j] = gate;
+			state.transistors_c1[j] = c1;
+			state.transistors_c2[j] = c2;
 			j++;
 		}
 	}
@@ -744,24 +745,24 @@ setupNodesAndTransistors()
 
 	/* cross reference transistors in nodes data structures */
 	for (i = 0; i < transistors; i++) {
-		nodenum_t gate = transistors_gate[i];
-		nodenum_t c1 = transistors_c1[i];
-		nodenum_t c2 = transistors_c2[i];
-		nodes_gates[gate][nodes_gatecount[gate]++] = i;
-		nodes_c1c2s[c1][nodes_c1c2count[c1]++] = i;
-		nodes_c1c2s[c2][nodes_c1c2count[c2]++] = i;
+		nodenum_t gate = state.transistors_gate[i];
+		nodenum_t c1 = state.transistors_c1[i];
+		nodenum_t c2 = state.transistors_c2[i];
+		state.nodes_gates[gate][state.nodes_gatecount[gate]++] = i;
+		state.nodes_c1c2s[c1][state.nodes_c1c2count[c1]++] = i;
+		state.nodes_c1c2s[c2][state.nodes_c1c2count[c2]++] = i;
 	}
 
 	for (i = 0; i < NODES; i++) {
-		nodes_dependants[i] = 0;
-		nodes_left_dependants[i] = 0;
-		for (count_t g = 0; g < nodes_gatecount[i]; g++) {
-			transnum_t t = nodes_gates[i][g];
-			nodenum_t c1 = transistors_c1[t];
+		state.nodes_dependants[i] = 0;
+		state.nodes_left_dependants[i] = 0;
+		for (count_t g = 0; g < state.nodes_gatecount[i]; g++) {
+			transnum_t t = state.nodes_gates[i][g];
+			nodenum_t c1 = state.transistors_c1[t];
 			if (c1 != vss && c1 != vcc) {
 				add_nodes_dependant(i, c1);
 			}
-			nodenum_t c2 = transistors_c2[t];
+			nodenum_t c2 = state.transistors_c2[t];
 			if (c2 != vss && c2 != vcc) {
 				add_nodes_dependant(i, c2);
 			}
@@ -811,6 +812,9 @@ resetChip()
 void
 initAndResetChip()
 {
+	state.listin.list = state.list1;
+	state.listout.list = state.list2;
+
 	/* set up data structures for efficient emulation */
 	setupNodesAndTransistors();
 
