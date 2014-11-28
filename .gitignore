@@ -3,3 +3,6 @@
 # patch detritus
 *.orig
 *.rej
+# object files
+cbmbasic
+*.o
