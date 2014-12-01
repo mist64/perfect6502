@@ -1,7 +1,6 @@
 OBJS=perfect6502.o
 OBJS+=cbmbasic.o runtime.o runtime_init.o plugin.o console.o emu.o
 #OBJS+=measure.o
-#OBJS+=broken_transistors.o runtime.o runtime_init.o plugin.o console.o emu.o
 CFLAGS=-Werror -Wall -O3
 CC=clang
 

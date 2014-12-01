@@ -3,7 +3,6 @@
 #endif
 
 extern state_t *initAndResetChip();
-extern void resetChip(state_t *state);
 extern void step(state_t *state);
 extern void chipStatus(state_t *state);
 extern unsigned short readPC(state_t *state);
@@ -14,7 +13,7 @@ extern unsigned char readSP(state_t *state);
 extern unsigned char readP(state_t *state);
 extern unsigned int readRW(state_t *state);
 extern unsigned short readAddressBus(state_t *state);
-//extern void writeDataBus(unsigned char);
+extern void writeDataBus(state_t *state, unsigned char);
 extern unsigned char readDataBus(state_t *state);
 extern unsigned char readIR(state_t *state);
 
