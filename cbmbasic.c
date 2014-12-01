@@ -7,19 +7,19 @@ main()
 {
 	int clk = 0;
 
-	initAndResetChip();
+	void *state = initAndResetChip();
 
 	/* set up memory for user program */
 	init_monitor();
 
 	/* emulate the 6502! */
 	for (;;) {
-		step();
+		step(state);
 		clk = !clk;
 		if (clk)
-			handle_monitor();
+			handle_monitor(state);
 
-//		chipStatus();
+//		chipStatus(state);
 		//if (!(cycle % 1000)) printf("%d\n", cycle);
 	};
 }

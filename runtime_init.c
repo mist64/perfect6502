@@ -50,17 +50,17 @@ init_monitor()
 }
 
 void
-handle_monitor()
+handle_monitor(void *state)
 {
-	PC = readPC();
+	PC = readPC(state);
 
 	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0)) {
 		/* get register status out of 6502 */
-		A = readA();
-		X = readX();
-		Y = readY();
-		S = readSP();
-		P = readP();
+		A = readA(state);
+		X = readX(state);
+		Y = readY(state);
+		S = readSP(state);
+		P = readP(state);
 		N = P >> 7;
 		Z = (P >> 1) & 1;
 		C = P & 1;
