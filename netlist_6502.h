@@ -9,6 +9,8 @@
  for original source material:  www.visual6502.org
  */
 
+#include "types.h"
+
 BOOL
 netlist_6502_node_is_pullup[] = {
 	1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1,
@@ -87,12 +89,6 @@ netlist_6502_node_is_pullup[] = {
 	0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 2,
 	0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1
 };
-
-typedef struct {
-	int gate;
-	int c1;
-	int c2;
-} netlist_transdefs;
 
 netlist_transdefs
 netlist_6502_transdefs[] = {
