@@ -669,8 +669,6 @@ step(state_t *state)
  *
  ************************************************************/
 
-unsigned int transistors;
-
 static inline void
 add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b)
 {
@@ -748,6 +746,15 @@ setupNodesAndTransistors()
 		nodenum_t c2 = transdefs[i].c2;
 		/* skip duplicate transistors */
 		BOOL found = NO;
+		for (count_t j2 = 0; j2 < j; j2++) {
+			if (state->transistors_gate[j2] == gate &&
+				((state->transistors_c1[j2] == c1 &&
+				state->transistors_c2[j2] == c2) ||
+				(state->transistors_c1[j2] == c2 &&
+				 state->transistors_c2[j2] == c1))) {
+				found = YES;
+			}
+		}
 		if (!found) {
 			state->transistors_gate[j] = gate;
 			state->transistors_c1[j] = c1;
@@ -755,10 +762,10 @@ setupNodesAndTransistors()
 			j++;
 		}
 	}
-	transistors = j;
+	state->transistors = j;
 
 	/* cross reference transistors in nodes data structures */
-	for (i = 0; i < transistors; i++) {
+	for (i = 0; i < state->transistors; i++) {
 		nodenum_t gate = state->transistors_gate[i];
 		nodenum_t c1 = state->transistors_c1[i];
 		nodenum_t c2 = state->transistors_c2[i];
