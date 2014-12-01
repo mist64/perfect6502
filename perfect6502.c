@@ -490,26 +490,46 @@ isNodeHigh(state_t *state, nodenum_t nn)
  *
  ************************************************************/
 
-#define read8(state, n0,n1,n2,n3,n4,n5,n6,n7) ((uint8_t)(isNodeHigh(state, n0) << 0) | (isNodeHigh(state, n1) << 1) | (isNodeHigh(state, n2) << 2) | (isNodeHigh(state, n3) << 3) | (isNodeHigh(state, n4) << 4) | (isNodeHigh(state, n5) << 5) | (isNodeHigh(state, n6) << 6) | (isNodeHigh(state, n7) << 7))
+static inline unsigned int
+readNodes(state_t *state, int count, nodenum_t *nodelist)
+{
+	int result = 0;
+	for (int i = count - 1; i >= 0; i--) {
+		result <<=  1;
+		result |= isNodeHigh(state, nodelist[i]);
+	}
+	return result;
+}
+
+void
+writeNodes(state_t *state, int count, nodenum_t *nodelist, int v)
+{
+	for (int i = 0; i < 8; i++, v >>= 1)
+	setNode(state, nodelist[i], v & 1);
+}
+
+/************************************************************
+ *
+ * 6502-specific Interfacing
+ *
+ ************************************************************/
 
 uint16_t
 readAddressBus(state_t *state)
 {
-	return read8(state, ab0,ab1,ab2,ab3,ab4,ab5,ab6,ab7) | (read8(state, ab8,ab9,ab10,ab11,ab12,ab13,ab14,ab15) << 8);
+	return readNodes(state, 16, (nodenum_t[]){ ab0, ab1, ab2, ab3, ab4, ab5, ab6, ab7, ab8, ab9, ab10, ab11, ab12, ab13, ab14, ab15 });
 }
 
 uint8_t
 readDataBus(state_t *state)
 {
-	return read8(state, db0,db1,db2,db3,db4,db5,db6,db7);
+	return readNodes(state, 8, (nodenum_t[]){ db0, db1, db2, db3, db4, db5, db6, db7 });
 }
 
 void
 writeDataBus(state_t *state, uint8_t d)
 {
-	static const nodenum_t dbnodes[8] = { db0, db1, db2, db3, db4, db5, db6, db7 };
-	for (int i = 0; i < 8; i++, d>>=1)
-		setNode(state, dbnodes[i], d & 1);
+	writeNodes(state, 8, (nodenum_t[]){ db0, db1, db2, db3, db4, db5, db6, db7 }, d);
 }
 
 BOOL
@@ -521,49 +541,49 @@ readRW(state_t *state)
 uint8_t
 readA(state_t *state)
 {
-	return read8(state, a0,a1,a2,a3,a4,a5,a6,a7);
+	return readNodes(state, 8, (nodenum_t[]){ a0,a1,a2,a3,a4,a5,a6,a7 });
 }
 
 uint8_t
 readX(state_t *state)
 {
-	return read8(state, x0,x1,x2,x3,x4,x5,x6,x7);
+	return readNodes(state, 8, (nodenum_t[]){ x0,x1,x2,x3,x4,x5,x6,x7 });
 }
 
 uint8_t
 readY(state_t *state)
 {
-	return read8(state, y0,y1,y2,y3,y4,y5,y6,y7);
+	return readNodes(state, 8, (nodenum_t[]){ y0,y1,y2,y3,y4,y5,y6,y7 });
 }
 
 uint8_t
 readP(state_t *state)
 {
-	return read8(state, p0,p1,p2,p3,p4,p5,p6,p7);
+	return readNodes(state, 8, (nodenum_t[]){ p0,p1,p2,p3,p4,p5,p6,p7 });
 }
 
 uint8_t
 readIR(state_t *state)
 {
-	return read8(state, notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7) ^ 0xFF;
+	return readNodes(state, 8, (nodenum_t[]){ notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7 }) ^ 0xFF;
 }
 
 uint8_t
 readSP(state_t *state)
 {
-	return read8(state, s0,s1,s2,s3,s4,s5,s6,s7);
+	return readNodes(state, 8, (nodenum_t[]){ s0,s1,s2,s3,s4,s5,s6,s7 });
 }
 
 uint8_t
 readPCL(state_t *state)
 {
-	return read8(state, pcl0,pcl1,pcl2,pcl3,pcl4,pcl5,pcl6,pcl7);
+	return readNodes(state, 8, (nodenum_t[]){ pcl0,pcl1,pcl2,pcl3,pcl4,pcl5,pcl6,pcl7 });
 }
 
 uint8_t
 readPCH(state_t *state)
 {
-	return read8(state, pch0,pch1,pch2,pch3,pch4,pch5,pch6,pch7);
+	return readNodes(state, 8, (nodenum_t[]){ pch0,pch1,pch2,pch3,pch4,pch5,pch6,pch7 });
 }
 
 uint16_t
@@ -619,12 +639,13 @@ chipStatus(state_t *state)
 
 uint8_t memory[65536];
 
-uint8_t mRead(uint16_t a)
+static uint8_t
+mRead(uint16_t a)
 {
 	return memory[a];
 }
 
-void
+static void
 mWrite(uint16_t a, uint8_t d)
 {
 	memory[a] = d;
@@ -687,7 +708,7 @@ add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
 	state->nodes_left_dependant[a][state->nodes_left_dependants[a]++] = b;
 }
 
-state_t *
+static state_t *
 setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nodenum_t nodes, nodenum_t transistors)
 {
 	/* allocate state */
