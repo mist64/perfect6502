@@ -52,10 +52,6 @@ typedef unsigned int BOOL;
 /* node numbers of probes */
 #include "nodenames.h"
 
-/* the 6502 consists of this many nodes and transistors */
-#define NODES (sizeof(segdefs)/sizeof(*segdefs))
-#define TRANSISTORS (sizeof(transdefs)/sizeof(*transdefs))
-
 /************************************************************
  *
  * Global Data Types
@@ -121,6 +117,9 @@ typedef struct {
 } list_t;
 
 typedef struct {
+	nodenum_t nodes;
+	nodenum_t transistors;
+
 	/* everything that describes a node */
 	bitmap_t *nodes_pullup;
 	bitmap_t *nodes_pulldown;
@@ -215,17 +214,9 @@ get_nodes_value(state_t *state, transnum_t t)
  *
  ************************************************************/
 
-#ifdef BROKEN_TRANSISTORS
-unsigned int broken_transistor = (unsigned int)-1;
-#endif
-
 static inline void
 set_transistors_on(state_t *state, transnum_t t, BOOL s)
 {
-#ifdef BROKEN_TRANSISTORS
-	if (t == broken_transistor)
-		return;
-#endif
 	set_bitmap(state->transistors_on, t, s);
 }
 
@@ -265,7 +256,7 @@ static inline void
 listout_clear(state_t *state)
 {
 	state->listout.count = 0;
-	bitmap_clear(state->listout_bitmap, NODES);
+	bitmap_clear(state->listout_bitmap, state->nodes);
 }
 
 static inline void
@@ -295,7 +286,7 @@ static inline void
 group_clear(state_t *state)
 {
 	state->groupcount = 0;
-	bitmap_clear(state->groupbitmap, NODES);
+	bitmap_clear(state->groupbitmap, state->nodes);
 }
 
 static inline void
@@ -700,36 +691,63 @@ add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
 	state->nodes_left_dependant[a][state->nodes_left_dependants[a]++] = b;
 }
 
-void
-setupNodesAndTransistors(state_t *state)
+state_t *
+setupNodesAndTransistors()
 {
+	/* allocate state */
+	state_t *state = malloc(sizeof(state_t));
+	state->nodes = sizeof(segdefs)/sizeof(*segdefs);
+	state->transistors = sizeof(transdefs)/sizeof(*transdefs);
+	state->nodes_pullup = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_pullup));
+	state->nodes_pulldown = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_pulldown));
+	state->nodes_value = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_value));
+	state->nodes_gates = malloc(state->nodes * sizeof(*state->nodes_gates));
+	for (count_t i = 0; i < state->nodes; i++) {
+		state->nodes_gates[i] = malloc(state->nodes * sizeof(**state->nodes_gates));
+	}
+	state->nodes_c1c2s = malloc(state->nodes * sizeof(*state->nodes_c1c2s));
+	for (count_t i = 0; i < state->nodes; i++) {
+		state->nodes_c1c2s[i] = malloc(2 * state->nodes * sizeof(**state->nodes_c1c2s));
+	}
+	state->nodes_gatecount = malloc(state->nodes * sizeof(*state->nodes_gatecount));
+	state->nodes_c1c2count = malloc(state->nodes * sizeof(*state->nodes_c1c2count));
+	state->nodes_dependants = malloc(state->nodes * sizeof(*state->nodes_dependants));
+	state->nodes_left_dependants = malloc(state->nodes * sizeof(*state->nodes_left_dependants));
+	state->nodes_dependant = malloc(state->nodes * sizeof(*state->nodes_dependant));
+	for (count_t i = 0; i < state->nodes; i++) {
+		state->nodes_dependant[i] = malloc(state->nodes * sizeof(**state->nodes_dependant));
+	}
+	state->nodes_left_dependant = malloc(state->nodes * sizeof(*state->nodes_left_dependant));
+	for (count_t i = 0; i < state->nodes; i++) {
+		state->nodes_left_dependant[i] = malloc(state->nodes * sizeof(**state->nodes_left_dependant));
+	}
+	state->transistors_gate = malloc(state->transistors * sizeof(*state->transistors_gate));
+	state->transistors_c1 = malloc(state->transistors * sizeof(*state->transistors_c1));
+	state->transistors_c2 = malloc(state->transistors * sizeof(*state->transistors_c2));
+	state->transistors_on = malloc(WORDS_FOR_BITS(state->transistors) * sizeof(*state->transistors_on));
+	state->list1 = malloc(state->nodes * sizeof(*state->list1));
+	state->list2 = malloc(state->nodes * sizeof(*state->list2));
+	state->listout_bitmap = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->listout_bitmap));
+	state->group = malloc(state->nodes * sizeof(*state->group));
+	state->groupbitmap = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->groupbitmap));
+	state->listin.list = state->list1;
+	state->listout.list = state->list2;
+
 	count_t i;
 	/* copy nodes into r/w data structure */
-	for (i = 0; i < NODES; i++) {
+	for (i = 0; i < state->nodes; i++) {
 		set_nodes_pullup(state, i, segdefs[i] == 1);
 		state->nodes_gatecount[i] = 0;
 		state->nodes_c1c2count[i] = 0;
 	}
 	/* copy transistors into r/w data structure */
 	count_t j = 0;
-	for (i = 0; i < TRANSISTORS; i++) {
+	for (i = 0; i < state->transistors; i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
 		/* skip duplicate transistors */
 		BOOL found = NO;
-#ifndef BROKEN_TRANSISTORS
-		for (count_t k = 0; k < i; k++) {
-			if (transdefs[k].gate == gate && 
-			    ((transdefs[k].c1 == c1 && 
-			    transdefs[k].c2 == c2) ||
-			    (transdefs[k].c1 == c2 && 
-			    transdefs[k].c2 == c1))) {
-				found = YES;
-				break; 
-			}
-		}
-#endif
 		if (!found) {
 			state->transistors_gate[j] = gate;
 			state->transistors_c1[j] = c1;
@@ -738,9 +756,6 @@ setupNodesAndTransistors(state_t *state)
 		}
 	}
 	transistors = j;
-#ifdef DEBUG
-	printf("transistors: %d\n", transistors);
-#endif
 
 	/* cross reference transistors in nodes data structures */
 	for (i = 0; i < transistors; i++) {
@@ -752,7 +767,7 @@ setupNodesAndTransistors(state_t *state)
 		state->nodes_c1c2s[c2][state->nodes_c1c2count[c2]++] = i;
 	}
 
-	for (i = 0; i < NODES; i++) {
+	for (i = 0; i < state->nodes; i++) {
 		state->nodes_dependants[i] = 0;
 		state->nodes_left_dependants[i] = 0;
 		for (count_t g = 0; g < state->nodes_gatecount[i]; g++) {
@@ -772,18 +787,22 @@ setupNodesAndTransistors(state_t *state)
 			}
 		}
 	}
+
+	return state;
 }
 
 void
 resetChip(state_t *state)
 {
+#if 0 /* unneseccary - RESET will stabilize the network anyway */
 	/* all nodes are down */
-	for (nodenum_t nn = 0; nn < NODES; nn++) {
+	for (nodenum_t nn = 0; nn < state->nodes; nn++) {
 		set_nodes_value(state, nn, 0);
 	}
 	/* all transistors are off */
-	for (transnum_t tn = 0; tn < TRANSISTORS; tn++) 
+	for (transnum_t tn = 0; tn < state->transistors; tn++)
 		set_transistors_on(state, tn, NO);
+#endif
 
 	setNode(state, res, 0);
 	setNode(state, clk0, 1);
@@ -792,7 +811,7 @@ resetChip(state_t *state)
 	setNode(state, irq, 1);
 	setNode(state, nmi, 1);
 
-	for (count_t i = 0; i < NODES; i++)
+	for (count_t i = 0; i < state->nodes; i++)
 		listout_add(state, i);
 
 	recalcNodeList(state);
@@ -811,46 +830,8 @@ resetChip(state_t *state)
 state_t *
 initAndResetChip()
 {
-	state_t *state = malloc(sizeof(state_t));
-
-	state->nodes_pullup = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->nodes_pullup));
-	state->nodes_pulldown = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->nodes_pulldown));
-	state->nodes_value = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->nodes_value));
-	state->nodes_gates = malloc(NODES * sizeof(*state->nodes_gates));
-	for (count_t i = 0; i < NODES; i++) {
-		state->nodes_gates[i] = malloc(NODES * sizeof(**state->nodes_gates));
-	}
-	state->nodes_c1c2s = malloc(NODES * sizeof(*state->nodes_c1c2s));
-	for (count_t i = 0; i < NODES; i++) {
-		state->nodes_c1c2s[i] = malloc(2 * NODES * sizeof(**state->nodes_c1c2s));
-	}
-	state->nodes_gatecount = malloc(NODES * sizeof(*state->nodes_gatecount));
-	state->nodes_c1c2count = malloc(NODES * sizeof(*state->nodes_c1c2count));
-	state->nodes_dependants = malloc(NODES * sizeof(*state->nodes_dependants));
-	state->nodes_left_dependants = malloc(NODES * sizeof(*state->nodes_left_dependants));
-	state->nodes_dependant = malloc(NODES * sizeof(*state->nodes_dependant));
-	for (count_t i = 0; i < NODES; i++) {
-		state->nodes_dependant[i] = malloc(NODES * sizeof(**state->nodes_dependant));
-	}
-	state->nodes_left_dependant = malloc(NODES * sizeof(*state->nodes_left_dependant));
-	for (count_t i = 0; i < NODES; i++) {
-		state->nodes_left_dependant[i] = malloc(NODES * sizeof(**state->nodes_left_dependant));
-	}
-	state->transistors_gate = malloc(TRANSISTORS * sizeof(*state->transistors_gate));
-	state->transistors_c1 = malloc(TRANSISTORS * sizeof(*state->transistors_c1));
-	state->transistors_c2 = malloc(TRANSISTORS * sizeof(*state->transistors_c2));
-	state->transistors_on = malloc(WORDS_FOR_BITS(TRANSISTORS) * sizeof(*state->transistors_on));
-	state->list1 = malloc(NODES * sizeof(*state->list1));
-	state->list2 = malloc(NODES * sizeof(*state->list2));
-	state->listout_bitmap = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->listout_bitmap));
-	state->group = malloc(NODES * sizeof(*state->group));
-	state->groupbitmap = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->groupbitmap));
-
-	state->listin.list = state->list1;
-	state->listout.list = state->list2;
-
 	/* set up data structures for efficient emulation */
-	setupNodesAndTransistors(state);
+	state_t *state = setupNodesAndTransistors();
 
 	/* set initial state of nodes, transistors, inputs; RESET chip */
 	resetChip(state);

@@ -21,7 +21,3 @@ extern unsigned char readIR(state_t *state);
 extern unsigned char memory[65536];
 extern unsigned int cycle;
 extern unsigned int transistors;
-
-#ifdef BROKEN_TRANSISTORS
-extern unsigned int broken_transistor;
-#endif
