@@ -45,10 +45,8 @@ typedef unsigned int BOOL;
  *
  ************************************************************/
 
-/* nodes */
-#include "segdefs.h"
-/* transistors */
-#include "transdefs.h"
+/* nodes & transistors */
+#include "netlist_6502.h"
 /* node numbers of probes */
 #include "nodenames.h"
 
@@ -690,12 +688,12 @@ add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
 }
 
 state_t *
-setupNodesAndTransistors()
+setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nodenum_t nodes, nodenum_t transistors)
 {
 	/* allocate state */
 	state_t *state = malloc(sizeof(state_t));
-	state->nodes = sizeof(segdefs)/sizeof(*segdefs);
-	state->transistors = sizeof(transdefs)/sizeof(*transdefs);
+	state->nodes = nodes;
+	state->transistors = transistors;
 	state->nodes_pullup = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_pullup));
 	state->nodes_pulldown = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_pulldown));
 	state->nodes_value = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_value));
@@ -734,7 +732,7 @@ setupNodesAndTransistors()
 	count_t i;
 	/* copy nodes into r/w data structure */
 	for (i = 0; i < state->nodes; i++) {
-		set_nodes_pullup(state, i, segdefs[i] == 1);
+		set_nodes_pullup(state, i, node_is_pullup[i]);
 		state->nodes_gatecount[i] = 0;
 		state->nodes_c1c2count[i] = 0;
 	}
@@ -801,7 +799,7 @@ setupNodesAndTransistors()
 void
 resetChip(state_t *state)
 {
-#if 0 /* unneseccary - RESET will stabilize the network anyway */
+#if 0 /* unnecessary - RESET will stabilize the network anyway */
 	/* all nodes are down */
 	for (nodenum_t nn = 0; nn < state->nodes; nn++) {
 		set_nodes_value(state, nn, 0);
@@ -838,7 +836,12 @@ state_t *
 initAndResetChip()
 {
 	/* set up data structures for efficient emulation */
-	state_t *state = setupNodesAndTransistors();
+	nodenum_t nodes = sizeof(netlist_6502_node_is_pullup)/sizeof(*netlist_6502_node_is_pullup);
+	nodenum_t transistors = sizeof(netlist_6502_transdefs)/sizeof(*netlist_6502_transdefs);
+	state_t *state = setupNodesAndTransistors(netlist_6502_transdefs,
+											  netlist_6502_node_is_pullup,
+											  nodes,
+											  transistors);
 
 	/* set initial state of nodes, transistors, inputs; RESET chip */
 	resetChip(state);
