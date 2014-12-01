@@ -25,7 +25,6 @@
 #include "netlist_sim.h"
 /* nodes & transistors */
 #include "netlist_6502.h"
-#include "nodenames.h"
 
 /************************************************************
  *
