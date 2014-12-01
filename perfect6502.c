@@ -86,7 +86,6 @@ typedef unsigned int bitmap_t;
 #endif
 
 #define WORDS_FOR_BITS(a) (a/(sizeof(bitmap_t) * 8)+1)
-#define DECLARE_BITMAP(name, count) bitmap_t name[WORDS_FOR_BITS(count)]
 
 static inline void
 bitmap_clear(bitmap_t *bitmap, count_t count)
@@ -123,37 +122,37 @@ typedef struct {
 
 typedef struct {
 	/* everything that describes a node */
-	DECLARE_BITMAP(nodes_pullup, NODES);
-	DECLARE_BITMAP(nodes_pulldown, NODES);
-	DECLARE_BITMAP(nodes_value, NODES);
-	nodenum_t nodes_gates[NODES][NODES];
-	nodenum_t nodes_c1c2s[NODES][2*NODES];
-	count_t nodes_gatecount[NODES];
-	count_t nodes_c1c2count[NODES];
-	nodenum_t nodes_dependants[NODES];
-	nodenum_t nodes_left_dependants[NODES];
-	nodenum_t nodes_dependant[NODES][NODES];
-	nodenum_t nodes_left_dependant[NODES][NODES];
+	bitmap_t *nodes_pullup;
+	bitmap_t *nodes_pulldown;
+	bitmap_t *nodes_value;
+	nodenum_t **nodes_gates;
+	nodenum_t **nodes_c1c2s;
+	count_t *nodes_gatecount;
+	count_t *nodes_c1c2count;
+	nodenum_t *nodes_dependants;
+	nodenum_t *nodes_left_dependants;
+	nodenum_t **nodes_dependant;
+	nodenum_t **nodes_left_dependant;
 
 	/* everything that describes a transistor */
-	nodenum_t transistors_gate[TRANSISTORS];
-	nodenum_t transistors_c1[TRANSISTORS];
-	nodenum_t transistors_c2[TRANSISTORS];
-	DECLARE_BITMAP(transistors_on, TRANSISTORS);
+	nodenum_t *transistors_gate;
+	nodenum_t *transistors_c1;
+	nodenum_t *transistors_c2;
+	bitmap_t *transistors_on;
 
 	/* the nodes we are working with */
-	nodenum_t list1[NODES];
+	nodenum_t *list1;
 	list_t listin;
 
 	/* the indirect nodes we are collecting for the next run */
-	nodenum_t list2[NODES];
+	nodenum_t *list2;
 	list_t listout;
 
-	DECLARE_BITMAP(listout_bitmap, NODES);
+	bitmap_t *listout_bitmap;
 
-	nodenum_t group[NODES];
+	nodenum_t *group;
 	count_t groupcount;
-	DECLARE_BITMAP(groupbitmap, NODES);
+	bitmap_t *groupbitmap;
 
 	enum {
 		contains_nothing,
@@ -813,6 +812,39 @@ state_t *
 initAndResetChip()
 {
 	state_t *state = malloc(sizeof(state_t));
+
+	state->nodes_pullup = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->nodes_pullup));
+	state->nodes_pulldown = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->nodes_pulldown));
+	state->nodes_value = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->nodes_value));
+	state->nodes_gates = malloc(NODES * sizeof(*state->nodes_gates));
+	for (count_t i = 0; i < NODES; i++) {
+		state->nodes_gates[i] = malloc(NODES * sizeof(**state->nodes_gates));
+	}
+	state->nodes_c1c2s = malloc(NODES * sizeof(*state->nodes_c1c2s));
+	for (count_t i = 0; i < NODES; i++) {
+		state->nodes_c1c2s[i] = malloc(2 * NODES * sizeof(**state->nodes_c1c2s));
+	}
+	state->nodes_gatecount = malloc(NODES * sizeof(*state->nodes_gatecount));
+	state->nodes_c1c2count = malloc(NODES * sizeof(*state->nodes_c1c2count));
+	state->nodes_dependants = malloc(NODES * sizeof(*state->nodes_dependants));
+	state->nodes_left_dependants = malloc(NODES * sizeof(*state->nodes_left_dependants));
+	state->nodes_dependant = malloc(NODES * sizeof(*state->nodes_dependant));
+	for (count_t i = 0; i < NODES; i++) {
+		state->nodes_dependant[i] = malloc(NODES * sizeof(**state->nodes_dependant));
+	}
+	state->nodes_left_dependant = malloc(NODES * sizeof(*state->nodes_left_dependant));
+	for (count_t i = 0; i < NODES; i++) {
+		state->nodes_left_dependant[i] = malloc(NODES * sizeof(**state->nodes_left_dependant));
+	}
+	state->transistors_gate = malloc(TRANSISTORS * sizeof(*state->transistors_gate));
+	state->transistors_c1 = malloc(TRANSISTORS * sizeof(*state->transistors_c1));
+	state->transistors_c2 = malloc(TRANSISTORS * sizeof(*state->transistors_c2));
+	state->transistors_on = malloc(WORDS_FOR_BITS(TRANSISTORS) * sizeof(*state->transistors_on));
+	state->list1 = malloc(NODES * sizeof(*state->list1));
+	state->list2 = malloc(NODES * sizeof(*state->list2));
+	state->listout_bitmap = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->listout_bitmap));
+	state->group = malloc(NODES * sizeof(*state->group));
+	state->groupbitmap = malloc(WORDS_FOR_BITS(NODES) * sizeof(*state->groupbitmap));
 
 	state->listin.list = state->list1;
 	state->listout.list = state->list2;
