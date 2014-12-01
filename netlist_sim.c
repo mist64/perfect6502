@@ -31,12 +31,6 @@
 #include <string.h>
 #include "types.h"
 
-/************************************************************
- *
- * Global Data Types
- *
- ************************************************************/
-
 /* the smallest types to fit the numbers */
 typedef uint16_t transnum_t;
 typedef uint16_t count_t;
@@ -44,11 +38,11 @@ typedef uint16_t count_t;
 
 /************************************************************
  *
- * Bitmap Data Structures and Algorithms
+ * Main State Data Structure
  *
  ************************************************************/
 
-#if 0 /* on 64 bit CPUs */
+#if 0 /* faster on 64 bit CPUs */
 typedef unsigned long long bitmap_t;
 #define BITMAP_SHIFT 6
 #define BITMAP_MASK 63
@@ -59,35 +53,6 @@ typedef unsigned int bitmap_t;
 #define BITMAP_MASK 31
 #define ONE 1
 #endif
-
-#define WORDS_FOR_BITS(a) (a/(sizeof(bitmap_t) * 8)+1)
-
-static inline void
-bitmap_clear(bitmap_t *bitmap, count_t count)
-{
-	bzero(bitmap, WORDS_FOR_BITS(count)*sizeof(bitmap_t));
-}
-
-static inline void
-set_bitmap(bitmap_t *bitmap, int index, BOOL state)
-{
-	if (state)
-		bitmap[index>>BITMAP_SHIFT] |= ONE << (index & BITMAP_MASK);
-	else
-		bitmap[index>>BITMAP_SHIFT] &= ~(ONE << (index & BITMAP_MASK));
-}
-
-static inline BOOL
-get_bitmap(bitmap_t *bitmap, int index)
-{
-	return (bitmap[index>>BITMAP_SHIFT] >> (index & BITMAP_MASK)) & 1;
-}
-
-/************************************************************
- *
- * Main State Data Structure
- *
- ************************************************************/
 
 /* list of nodes that need to be recalculated */
 typedef struct {
@@ -144,13 +109,48 @@ typedef struct {
 	} group_contains_value;
 } state_t;
 
+/************************************************************
+ *
+ * Main Header Include
+ *
+ ************************************************************/
+
 #define INCLUDED_FROM_NETLIST_SIM_C
 #include "netlist_sim.h"
 #undef INCLUDED_FROM_NETLIST_SIM_C
 
 /************************************************************
  *
- * Data Structures for Nodes
+ * Algorithms for Bitmaps
+ *
+ ************************************************************/
+
+#define WORDS_FOR_BITS(a) (a / (sizeof(bitmap_t) * 8) + 1)
+
+static inline void
+bitmap_clear(bitmap_t *bitmap, count_t count)
+{
+	bzero(bitmap, WORDS_FOR_BITS(count)*sizeof(bitmap_t));
+}
+
+static inline void
+set_bitmap(bitmap_t *bitmap, int index, BOOL state)
+{
+	if (state)
+		bitmap[index>>BITMAP_SHIFT] |= ONE << (index & BITMAP_MASK);
+	else
+		bitmap[index>>BITMAP_SHIFT] &= ~(ONE << (index & BITMAP_MASK));
+}
+
+static inline BOOL
+get_bitmap(bitmap_t *bitmap, int index)
+{
+	return (bitmap[index>>BITMAP_SHIFT] >> (index & BITMAP_MASK)) & 1;
+}
+
+/************************************************************
+ *
+ * Algorithms for Nodes
  *
  ************************************************************/
 
@@ -197,7 +197,7 @@ get_nodes_value(state_t *state, transnum_t t)
 
 /************************************************************
  *
- * Data Structures and Algorithms for Transistors
+ * Algorithms for Transistors
  *
  ************************************************************/
 
@@ -215,7 +215,7 @@ get_transistors_on(state_t *state, transnum_t t)
 
 /************************************************************
  *
- * Data Structures and Algorithms for Lists
+ * Algorithms for Lists
  *
  ************************************************************/
 
@@ -257,7 +257,7 @@ listout_add(state_t *state, nodenum_t i)
 
 /************************************************************
  *
- * Data Structures and Algorithms for Groups of Nodes
+ * Algorithms for Groups of Nodes
  *
  ************************************************************/
 
