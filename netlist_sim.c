@@ -615,12 +615,11 @@ stabilizeChip(state_t *state)
 void
 setNode(state_t *state, nodenum_t nn, BOOL s)
 {
-	BOOL oldstate = get_nodes_pullup(state, nn);
-	if (s != oldstate) {
-		set_nodes_pullup(state, nn, s);
-		set_nodes_pulldown(state, nn, !s);
-		listout_add(state, nn);
-	}
+        set_nodes_pullup(state, nn, s);
+        set_nodes_pulldown(state, nn, !s);
+        listout_add(state, nn);
+
+        recalcNodeList(state);
 }
 
 BOOL
