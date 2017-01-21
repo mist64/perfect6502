@@ -130,7 +130,7 @@ typedef struct {
 static inline void
 bitmap_clear(bitmap_t *bitmap, count_t count)
 {
-	bzero(bitmap, WORDS_FOR_BITS(count)*sizeof(bitmap_t));
+	memset(bitmap, 0, WORDS_FOR_BITS(count)*sizeof(bitmap_t));
 }
 
 static inline void
