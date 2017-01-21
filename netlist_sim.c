@@ -518,7 +518,9 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	state->group = malloc(state->nodes * sizeof(*state->group));
 	state->groupbitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->groupbitmap));
 	state->listin.list = state->list1;
+        state->listin.count = 0;
 	state->listout.list = state->list2;
+        state->listout.count = 0;
 
 	count_t i;
 	/* copy nodes into r/w data structure */
