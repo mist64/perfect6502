@@ -485,38 +485,38 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	state->transistors = transistors;
 	state->vss = vss;
 	state->vcc = vcc;
-	state->nodes_pullup = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_pullup));
-	state->nodes_pulldown = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_pulldown));
-	state->nodes_value = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->nodes_value));
+	state->nodes_pullup = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pullup));
+	state->nodes_pulldown = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pulldown));
+	state->nodes_value = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_value));
 	state->nodes_gates = malloc(state->nodes * sizeof(*state->nodes_gates));
 	for (count_t i = 0; i < state->nodes; i++) {
-		state->nodes_gates[i] = malloc(state->nodes * sizeof(**state->nodes_gates));
+		state->nodes_gates[i] = calloc(state->nodes, sizeof(**state->nodes_gates));
 	}
 	state->nodes_c1c2s = malloc(state->nodes * sizeof(*state->nodes_c1c2s));
 	for (count_t i = 0; i < state->nodes; i++) {
-		state->nodes_c1c2s[i] = malloc(2 * state->nodes * sizeof(**state->nodes_c1c2s));
+		state->nodes_c1c2s[i] = calloc(2 * state->nodes, sizeof(**state->nodes_c1c2s));
 	}
-	state->nodes_gatecount = malloc(state->nodes * sizeof(*state->nodes_gatecount));
-	state->nodes_c1c2count = malloc(state->nodes * sizeof(*state->nodes_c1c2count));
-	state->nodes_dependants = malloc(state->nodes * sizeof(*state->nodes_dependants));
-	state->nodes_left_dependants = malloc(state->nodes * sizeof(*state->nodes_left_dependants));
+	state->nodes_gatecount = calloc(state->nodes, sizeof(*state->nodes_gatecount));
+	state->nodes_c1c2count = calloc(state->nodes, sizeof(*state->nodes_c1c2count));
+	state->nodes_dependants = calloc(state->nodes, sizeof(*state->nodes_dependants));
+	state->nodes_left_dependants = calloc(state->nodes, sizeof(*state->nodes_left_dependants));
 	state->nodes_dependant = malloc(state->nodes * sizeof(*state->nodes_dependant));
 	for (count_t i = 0; i < state->nodes; i++) {
-		state->nodes_dependant[i] = malloc(state->nodes * sizeof(**state->nodes_dependant));
+		state->nodes_dependant[i] = calloc(state->nodes, sizeof(**state->nodes_dependant));
 	}
 	state->nodes_left_dependant = malloc(state->nodes * sizeof(*state->nodes_left_dependant));
 	for (count_t i = 0; i < state->nodes; i++) {
-		state->nodes_left_dependant[i] = malloc(state->nodes * sizeof(**state->nodes_left_dependant));
+		state->nodes_left_dependant[i] = calloc(state->nodes, sizeof(**state->nodes_left_dependant));
 	}
-	state->transistors_gate = malloc(state->transistors * sizeof(*state->transistors_gate));
-	state->transistors_c1 = malloc(state->transistors * sizeof(*state->transistors_c1));
-	state->transistors_c2 = malloc(state->transistors * sizeof(*state->transistors_c2));
-	state->transistors_on = malloc(WORDS_FOR_BITS(state->transistors) * sizeof(*state->transistors_on));
-	state->list1 = malloc(state->nodes * sizeof(*state->list1));
-	state->list2 = malloc(state->nodes * sizeof(*state->list2));
-	state->listout_bitmap = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->listout_bitmap));
+	state->transistors_gate = calloc(state->transistors, sizeof(*state->transistors_gate));
+	state->transistors_c1 = calloc(state->transistors, sizeof(*state->transistors_c1));
+	state->transistors_c2 = calloc(state->transistors, sizeof(*state->transistors_c2));
+	state->transistors_on = calloc(WORDS_FOR_BITS(state->transistors), sizeof(*state->transistors_on));
+	state->list1 = calloc(state->nodes, sizeof(*state->list1));
+	state->list2 = calloc(state->nodes, sizeof(*state->list2));
+	state->listout_bitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->listout_bitmap));
 	state->group = malloc(state->nodes * sizeof(*state->group));
-	state->groupbitmap = malloc(WORDS_FOR_BITS(state->nodes) * sizeof(*state->groupbitmap));
+	state->groupbitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->groupbitmap));
 	state->listin.list = state->list1;
 	state->listout.list = state->list2;
 
