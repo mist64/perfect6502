@@ -51,7 +51,7 @@ typedef unsigned long long bitmap_t;
 typedef unsigned int bitmap_t;
 #define BITMAP_SHIFT 5
 #define BITMAP_MASK 31
-#define ONE 1
+#define ONE 1U
 #endif
 
 /* list of nodes that need to be recalculated */
