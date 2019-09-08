@@ -198,6 +198,12 @@ initAndResetChip()
 	return state;
 }
 
+void
+destroyChip(void *state)
+{
+    destroyNodesAndTransistors(state);
+}
+
 /************************************************************
  *
  * Tracing/Debugging
