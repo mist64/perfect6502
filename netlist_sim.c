@@ -600,6 +600,44 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 }
 
 void
+destroyNodesAndTransistors(state_t *state)
+{
+    free(state->nodes_pullup);
+    free(state->nodes_pulldown);
+    free(state->nodes_value);
+    for (count_t i = 0; i < state->nodes; i++) {
+        free(state->nodes_gates[i]);
+    }
+    free(state->nodes_gates);
+    for (count_t i = 0; i < state->nodes; i++) {
+        free(state->nodes_c1c2s[i]);
+    }
+    free(state->nodes_c1c2s);
+    free(state->nodes_gatecount);
+    free(state->nodes_c1c2count);
+    free(state->nodes_dependants);
+    free(state->nodes_left_dependants);
+    for (count_t i = 0; i < state->nodes; i++) {
+        free(state->nodes_dependant[i]);
+    }
+    free(state->nodes_dependant);
+    for (count_t i = 0; i < state->nodes; i++) {
+        free(state->nodes_left_dependant[i]);
+    }
+    free(state->nodes_left_dependant);
+    free(state->transistors_gate);
+    free(state->transistors_c1);
+    free(state->transistors_c2);
+    free(state->transistors_on);
+    free(state->list1);
+    free(state->list2);
+    free(state->listout_bitmap);
+    free(state->group);
+    free(state->groupbitmap);
+    free(state);
+}
+
+void
 stabilizeChip(state_t *state)
 {
 	for (count_t i = 0; i < state->nodes; i++)
