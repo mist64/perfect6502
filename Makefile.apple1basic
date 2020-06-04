@@ -1,6 +1,6 @@
-OBJS=perfect6502.o apple1basic.o 
+OBJS=perfect6502.o apple1basic/apple1basic.o
 CFLAGS=-Werror -Wall -O3
-CC=clang
+CC=cc
 
 all: apple1basic
 

@@ -1,14 +1,14 @@
 OBJS=perfect6502.o netlist_sim.o
-OBJS+=cbmbasic.o runtime.o runtime_init.o plugin.o console.o emu.o
+OBJS+=cbmbasic/cbmbasic.o cbmbasic/runtime.o cbmbasic/runtime_init.o cbmbasic/plugin.o cbmbasic/console.o cbmbasic/emu.o
 #OBJS+=measure.o
 CFLAGS=-Werror -Wall -O3
-CC=clang
+CC=cc
 
 all: cbmbasic
 
 cbmbasic: $(OBJS)
-	$(CC) -o cbmbasic $(OBJS)
+	$(CC) -o cbmbasic/cbmbasic $(OBJS)
 
 clean:
-	rm -f $(OBJS) cbmbasic
+	rm -f $(OBJS) cbmbasic/cbmbasic
 

@@ -42,7 +42,7 @@ typedef uint16_t count_t;
  *
  ************************************************************/
 
-#if 0 /* faster on 64 bit CPUs */
+#if 1 /* faster on 64 bit CPUs */
 typedef unsigned long long bitmap_t;
 #define BITMAP_SHIFT 6
 #define BITMAP_MASK 63

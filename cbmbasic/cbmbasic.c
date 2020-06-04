@@ -1,4 +1,4 @@
-#include "perfect6502.h"
+#include "../perfect6502.h"
 #include "runtime.h"
 #include "runtime_init.h"
 

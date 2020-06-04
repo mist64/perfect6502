@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "perfect6502.h"
+#include "../perfect6502.h"
 /* XXX hook up memory[] with RAM[] in runtime.c */
  
 /************************************************************
@@ -20,7 +20,7 @@ void
 init_monitor()
 {
 	FILE *f;
-	f = fopen("cbmbasic.bin", "r");
+	f = fopen("cbmbasic/cbmbasic.bin", "r");
 	fread(memory + 0xA000, 1, 17591, f);
 	fclose(f);
 

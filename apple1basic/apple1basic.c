@@ -2,7 +2,7 @@
 #ifndef _WIN32
 #include <sys/stat.h>
 
-#include "perfect6502.h"
+#include "../perfect6502.h"
  
 /************************************************************
  *
