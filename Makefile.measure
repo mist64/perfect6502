@@ -1,0 +1,13 @@
+OBJS=perfect6502.o netlist_sim.o
+OBJS+=measure.o
+CFLAGS=-Werror -Wall -O3
+CC=cc
+
+all: measure
+
+measure: $(OBJS)
+	$(CC) -o measure $(OBJS)
+
+clean:
+	rm -f $(OBJS) measure
+

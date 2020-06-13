@@ -145,7 +145,7 @@ handleMemory(void *state)
  *
  ************************************************************/
 
-static unsigned int cycle;
+unsigned int cycle;
 
 void
 step(void *state)

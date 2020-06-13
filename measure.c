@@ -26,9 +26,9 @@ extern uint8_t memory[65536];
 #define X_OFFSET 5
 #define Y_OFFSET 10
 
-#define IS_READ_CYCLE ((cycle & 1) && readRW())
-#define IS_WRITE_CYCLE ((cycle & 1) && !readRW())
-#define IS_READING(a) (IS_READ_CYCLE && readAddressBus() == (a))
+#define IS_READ_CYCLE ((cycle & 1) && readRW(state))
+#define IS_WRITE_CYCLE ((cycle & 1) && !readRW(state))
+#define IS_READING(a) (IS_READ_CYCLE && readAddressBus(state) == (a))
 
 struct {
 	BOOL crash;
@@ -111,12 +111,14 @@ setup_memory(uint8_t opcode)
 	memory[BRK_VECTOR] = 0x00; /* loop there */
 }
 
+void *state;
+
 void
 resetChip_test()
 {
-	resetChip();
+	state = initAndResetChip();
 	for (int i = 0; i < 62; i++)
-		step();
+		step(state);
 
 	cycle = -1;
 }
@@ -124,7 +126,7 @@ resetChip_test()
 int
 main()
 {
-	initAndResetChip();
+	state = initAndResetChip();
 
 	for (int opcode = 0x00; opcode <= 0xFF; opcode++) {
 //	for (int opcode = 0xA9; opcode <= 0xAA; opcode++) {
@@ -138,7 +140,7 @@ main()
 		resetChip_test();
 		int i;
 		for (i = 0; i < MAX_CYCLES; i++) {
-			step();
+			step(state);
 			if (IS_READING(BRK_VECTOR))
 				break;
 		};
@@ -147,7 +149,7 @@ main()
 			data[opcode].crash = YES;
 		} else {
 			data[opcode].crash = NO;
-			uint16_t brk_addr = memory[0x0100+readSP()+2] | memory[0x0100+readSP()+3]<<8;
+			uint16_t brk_addr = memory[0x0100+readSP(state)+2] | memory[0x0100+readSP(state)+3]<<8;
 			data[opcode].length = brk_addr - INSTRUCTION_ADDR - BRK_LENGTH;
 
 			/**************************************************
@@ -156,10 +158,10 @@ main()
 			setup_memory(opcode);
 			resetChip_test();
 			for (i = 0; i < MAX_CYCLES; i++) {
-				step();
+				step(state);
 //				chipStatus();
 //printf("cycle = %d  %x\n", cycle, readIR());
-				if (readIR() == 0x00)
+				if (readIR(state) == 0x00)
 					break;
 			};
 			if (cycle)
@@ -198,25 +200,25 @@ main()
 			data[opcode].writes = NO;
 
 			for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
-				step();
+				step(state);
 				if (IS_READ_CYCLE || IS_WRITE_CYCLE) {
-//printf("RW@ %X\n", readAddressBus());
+//printf("RW@ %X\n", readAddressBus(state));
 					BOOL is_data_access = YES;
-					if (readAddressBus() == MAGIC_8)
+					if (readAddressBus(state) == MAGIC_8)
 						data[opcode].zp = YES;
-					else if (readAddressBus() == MAGIC_16)
+					else if (readAddressBus(state) == MAGIC_16)
 						data[opcode].abs = YES;
-					else if (readAddressBus() == MAGIC_8 + X_OFFSET)
+					else if (readAddressBus(state) == MAGIC_8 + X_OFFSET)
 						data[opcode].zpx = YES;
-					else if (readAddressBus() == MAGIC_16 + X_OFFSET)
+					else if (readAddressBus(state) == MAGIC_16 + X_OFFSET)
 						data[opcode].absx = YES;
-					else if (readAddressBus() == MAGIC_8 + Y_OFFSET)
+					else if (readAddressBus(state) == MAGIC_8 + Y_OFFSET)
 						data[opcode].zpy = YES;
-					else if (readAddressBus() == MAGIC_16 + Y_OFFSET)
+					else if (readAddressBus(state) == MAGIC_16 + Y_OFFSET)
 						data[opcode].absy = YES;
-					else if (readAddressBus() == MAGIC_IZX)
+					else if (readAddressBus(state) == MAGIC_IZX)
 						data[opcode].izx = YES;
-					else if (readAddressBus() == MAGIC_IZY + Y_OFFSET)
+					else if (readAddressBus(state) == MAGIC_IZY + Y_OFFSET)
 						data[opcode].izy = YES;
 					else
 						is_data_access = NO;
@@ -315,12 +317,12 @@ main()
 					writes = 0;
 					reads = 0;
 					for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
-						step();
+						step(state);
 						if (IS_READ_CYCLE) {
 							if (!j)
-								read[reads++] = readAddressBus();
+								read[reads++] = readAddressBus(state);
 							else
-								if (read[reads++] != readAddressBus()) {
+								if (read[reads++] != readAddressBus(state)) {
 									different = YES;
 //printf("[[[%d]]]", __LINE__);
 									break;
@@ -328,16 +330,16 @@ main()
 						}
 						if (IS_WRITE_CYCLE) {
 							if (!j) {
-								write[writes] = readAddressBus();
-								write_data[writes++] = readDataBus();
+								write[writes] = readAddressBus(state);
+								write_data[writes++] = readDataBus(state);
 							} else {
-								if (write[writes] != readAddressBus()) {
+								if (write[writes] != readAddressBus(state)) {
 									different = YES;
 //printf("[[[%d]]]", __LINE__);
 									break;
 								}
-								if (write_data[writes++] != readDataBus()) {
-//printf("[[[%d:k=%d;%x@%x/%x]]]", __LINE__, k, write[writes-1], write_data[writes-1], readDataBus());
+								if (write_data[writes++] != readDataBus(state)) {
+//printf("[[[%d:k=%d;%x@%x/%x]]]", __LINE__, k, write[writes-1], write_data[writes-1], readDataBus(state));
 									different = YES;
 									break;
 								}
@@ -349,9 +351,9 @@ main()
 					/* changes A */
 					if (!(k == 0)) {
 						if (!j) {
-							end_a = readA();
+							end_a = readA(state);
 						} else {
-							if (end_a != readA()) {
+							if (end_a != readA(state)) {
 								different = YES;
 								break;
 							}
@@ -360,9 +362,9 @@ main()
 					/* changes X */
 					if (!(k == 1)) {
 						if (!j) {
-							end_x = readX();
+							end_x = readX(state);
 						} else {
-							if (end_x != readX()) {
+							if (end_x != readX(state)) {
 								different = YES;
 								break;
 							}
@@ -371,9 +373,9 @@ main()
 					/* changes Y */
 					if (!(k == 2)) {
 						if (!j) {
-							end_y = readY();
+							end_y = readY(state);
 						} else {
-							if (end_y != readY()) {
+							if (end_y != readY(state)) {
 								different = YES;
 								break;
 							}
@@ -382,11 +384,11 @@ main()
 					/* changes S */
 					if (!(k == 3)) {
 						if (!j) {
-							end_s = readSP();
+							end_s = readSP(state);
 						} else {
-							if (end_s != readSP()) {
+							if (end_s != readSP(state)) {
 								different = YES;
-//printf("[%x/%x]", end_s, readSP());
+//printf("[%x/%x]", end_s, readSP(state));
 								break;
 							}
 						}
@@ -394,9 +396,9 @@ main()
 					/* changes P */
 					if (!(k == 4)) {
 						if (!j) {
-							end_p = readP();
+							end_p = readP(state);
 						} else {
-							if (end_p != readP()) {
+							if (end_p != readP(state)) {
 								different = YES;
 								break;
 							}
@@ -464,17 +466,17 @@ main()
 				}
 				resetChip_test();
 				for (i = 0; i < data[opcode].cycles * 2 + 2; i++) {
-					step();
+					step(state);
 				};
-				if (readA() != magics[j + 0])
+				if (readA(state) != magics[j + 0])
 					data[opcode].outputa = YES;
-				if (readX() != magics[j + 1])
+				if (readX(state) != magics[j + 1])
 					data[opcode].outputx = YES;
-				if (readY() != magics[j + 2])
+				if (readY(state) != magics[j + 2])
 					data[opcode].outputy = YES;
-				if (readSP() != magics[j + 3])
+				if (readSP(state) != magics[j + 3])
 					data[opcode].outputs = YES;
-				if ((readP() & 0xCF) != (magics[j + 4] & 0xCF)) /* NV#BDIZC */
+				if ((readP(state) & 0xCF) != (magics[j + 4] & 0xCF)) /* NV#BDIZC */
 					data[opcode].outputp = YES;
 			}
 		}
