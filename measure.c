@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <strings.h>
+#include <string.h>
 
 #include "perfect6502.h"
 
@@ -74,7 +74,7 @@ uint16_t initial_s, initial_p, initial_a, initial_x, initial_y;
 void
 setup_memory(uint8_t opcode)
 {
-	bzero(memory, 65536);
+	memset(memory, 0, 65536);
 
 	memory[0xFFFC] = SETUP_ADDR & 0xFF;
 	memory[0xFFFD] = SETUP_ADDR >> 8;
@@ -116,6 +116,9 @@ void *state;
 void
 resetChip_test()
 {
+	if (state != NULL) {
+		destroyChip(state);
+	}
 	state = initAndResetChip();
 	for (int i = 0; i < 62; i++)
 		step(state);
@@ -222,11 +225,12 @@ main()
 						data[opcode].izy = YES;
 					else
 						is_data_access = NO;
-					if (is_data_access)
+					if (is_data_access) {
 						if (IS_READ_CYCLE)
 							data[opcode].reads = YES;
 						if (IS_WRITE_CYCLE)
 							data[opcode].writes = YES;
+					}
 				}
 			};
 
@@ -270,7 +274,7 @@ main()
 				BOOL different = NO;
 				int reads, writes;
 				uint16_t read[100], write[100], write_data[100];
-				uint8_t end_a, end_x, end_y, end_s, end_p;
+				uint8_t end_a, end_x, end_y, end_s = 0, end_p = 0;
 				for (int j = 0; j < sizeof(magics)/sizeof(*magics); j++) {
 					setup_memory(opcode);
 					if (data[opcode].length == 2) {

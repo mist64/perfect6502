@@ -16,13 +16,21 @@ unsigned char A, X, Y, S, P;
 unsigned short PC;
 int N, Z, C;
 
-void
+int
 init_monitor()
 {
 	FILE *f;
-	f = fopen("cbmbasic/cbmbasic.bin", "r");
-	fread(memory + 0xA000, 1, 17591, f);
+	f = fopen("cbmbasic/cbmbasic.bin", "rb");
+	if (f == NULL) {
+		perror("Error opening cbmbasic/cbmbasic.bin");
+		return 1;
+	}
+	size_t readlen = fread(memory + 0xA000, 1, 17591, f);
 	fclose(f);
+	if (readlen != 17591) {
+		perror("Error reading cbmbasic/cbmbasic.bin");
+		return 1;
+	}
 
 	/*
 	 * fill the KERNAL jumptable with JMP $F800;
@@ -47,6 +55,7 @@ init_monitor()
 	
 	memory[0xfffc] = 0x00;
 	memory[0xfffd] = 0xF0;
+	return 0;
 }
 
 void

@@ -10,7 +10,9 @@ main()
 	void *state = initAndResetChip();
 
 	/* set up memory for user program */
-	init_monitor();
+	if (init_monitor()) {
+		return 1;
+	}
 
 	/* emulate the 6502! */
 	for (;;) {
