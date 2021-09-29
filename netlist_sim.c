@@ -114,15 +114,16 @@ typedef struct {
 	count_t groupcount;
 	bitmap_t *groupbitmap;
 
-	enum {
-		contains_nothing,
-		contains_hi,
-		contains_pullup,
-		contains_pulldown,
-		contains_vcc,
-		contains_vss
-	} group_contains_value;
 } state_t;
+
+typedef enum {
+        contains_nothing = 0,
+        contains_hi = 1,
+        contains_pullup = 2,
+        contains_pulldown = 3,
+        contains_vcc = 4,
+        contains_vss = 5
+} group_value;
 
 /************************************************************
  *
@@ -322,8 +323,8 @@ group_count(state_t *state)
  *
  ************************************************************/
 
-static inline void
-addNodeToGroup(state_t *state, nodenum_t n)
+static inline group_value
+addNodeToGroup(state_t *state, nodenum_t n, group_value val)
 {
 	/*
 	 * We need to stop at vss and vcc, otherwise we'll revisit other groups
@@ -331,30 +332,27 @@ addNodeToGroup(state_t *state, nodenum_t n)
 	 * the fact that they are connected to vcc or vss.
 	 */
 	if (n == state->vss) {
-		state->group_contains_value = contains_vss;
-		return;
+		return contains_vss;
 	}
+    
 	if (n == state->vcc) {
-		if (state->group_contains_value != contains_vss)
-			state->group_contains_value = contains_vcc;
-		return;
+		if (val != contains_vss)
+			val = contains_vcc;
+		return val;
 	}
 
     /* check and see if we already have this node, and if so return */
 	if (group_contains(state, n))
-		return;
+		return val;
 
 	group_add(state, n);
 
-	if (state->group_contains_value < contains_pulldown && get_nodes_pulldown(state, n)) {
-		state->group_contains_value = contains_pulldown;
-	}
-	if (state->group_contains_value < contains_pullup && get_nodes_pullup(state, n)) {
-		state->group_contains_value = contains_pullup;
-	}
-	if (state->group_contains_value < contains_hi && get_nodes_value(state, n)) {
-		state->group_contains_value = contains_hi;
-	}
+	if (val < contains_pulldown && get_nodes_pulldown(state, n))
+		val = contains_pulldown;
+	if (val < contains_pullup && get_nodes_pullup(state, n))
+		val = contains_pullup;
+	if (val < contains_hi && get_nodes_value(state, n))
+		val = contains_hi;
     /* state can remain at contains_nothing if the node value is low */
 
 	/* revisit all transistors that control this node */
@@ -365,25 +363,25 @@ addNodeToGroup(state_t *state, nodenum_t n)
 		const c1c2_t c = node_c1c2s[t];
 		/* if the transistor connects c1 and c2... */
 		if (get_transistors_on(state, c.transistor)) {
-			addNodeToGroup(state, c.other_node);
+			val = addNodeToGroup(state, c.other_node, val);
 		}
 	}
+ 
+    return val;
 }
 
-static inline void
+static inline group_value
 addAllNodesToGroup(state_t *state, nodenum_t node)
 {
 	group_clear(state);
 
-	state->group_contains_value = contains_nothing;
-
-	addNodeToGroup(state, node);
+	return addNodeToGroup(state, node, contains_nothing);
 }
 
 static inline BOOL
-getGroupValue(state_t *state)
+getGroupValue(group_value node_value)
 {
-	switch (state->group_contains_value) {
+	switch (node_value) {
 		case contains_vcc:
 		case contains_pullup:
 		case contains_hi:
@@ -402,10 +400,10 @@ recalcNode(state_t *state, nodenum_t node)
 	 * get all nodes that are connected through
 	 * transistors, starting with this one
 	 */
-	addAllNodesToGroup(state, node);
+	group_value node_value = addAllNodesToGroup(state, node);
 
 	/* get the state of the group */
-	BOOL newv = getGroupValue(state);
+	BOOL newv = getGroupValue(node_value);
 
 	/*
 	 * - set all nodes to the group state
