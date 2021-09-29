@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "../perfect6502.h"
 /* XXX hook up memory[] with RAM[] in runtime.c */
@@ -9,7 +10,7 @@
  *
  ************************************************************/
 
-extern int kernal_dispatch();
+extern int kernal_dispatch(void);
 
 /* imported by runtime.c */
 unsigned char A, X, Y, S, P;
@@ -17,10 +18,14 @@ unsigned short PC;
 int N, Z, C;
 
 void
-init_monitor()
+init_monitor(void)
 {
 	FILE *f;
-	f = fopen("cbmbasic/cbmbasic.bin", "r");
+	f = fopen("cbmbasic/cbmbasic.bin", "rb");
+    if (f == NULL) {
+        fprintf(stderr,"Could not open cmbasic file\n");
+        exit(-1);
+    }
 	fread(memory + 0xA000, 1, 17591, f);
 	fclose(f);
 

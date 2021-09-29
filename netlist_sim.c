@@ -698,7 +698,7 @@ isNodeHigh(state_t *state, nodenum_t nn)
 unsigned int
 readNodes(state_t *state, int count, nodenum_t *nodelist)
 {
-	int result = 0;
+	unsigned int result = 0;
 	for (int i = count - 1; i >= 0; i--) {
 		result <<=  1;
 		result |= isNodeHigh(state, nodelist[i]);
