@@ -42,16 +42,24 @@ typedef uint16_t count_t;
  *
  ************************************************************/
 
-#if 1 /* faster on 64 bit CPUs */
+#if 1       /* faster on 64 bit CPUs */
 typedef unsigned long long bitmap_t;
 #define BITMAP_SHIFT 6
 #define BITMAP_MASK 63
 #define ONE 1ULL
-#else
-typedef unsigned int bitmap_t;
+
+#elif 0       /* faster on most 32 bit CPUs */
+typedef uint32_t bitmap_t;
 #define BITMAP_SHIFT 5
 #define BITMAP_MASK 31
+#define ONE 1UL
+
+#else       /* faster in some cases (and compilers) that allow for vectorization */
+typedef uint8_t bitmap_t;
+#define BITMAP_SHIFT 3
+#define BITMAP_MASK 7
 #define ONE 1U
+
 #endif
 
 /* list of nodes that need to be recalculated */
@@ -374,7 +382,6 @@ static inline group_value
 addAllNodesToGroup(state_t *state, nodenum_t node)
 {
 	group_clear(state);
-
 	return addNodeToGroup(state, node, contains_nothing);
 }
 
@@ -412,7 +419,7 @@ recalcNode(state_t *state, nodenum_t node)
 	 *   for the next run
 	 */
 	for (count_t i = 0; i < group_count(state); i++) {
-		nodenum_t nn = group_get(state, i);
+		const nodenum_t nn = group_get(state, i);
 		if (get_nodes_value(state, nn) != newv) {
 			set_nodes_value(state, nn, newv);
             const count_t gate_count = state->nodes_gatecount[nn];
@@ -442,7 +449,10 @@ recalcNode(state_t *state, nodenum_t node)
 void
 recalcNodeList(state_t *state)
 {
-	for (int j = 0; j < 100; j++) {	/* loop limiter */
+    const int max_iterations = 50;
+    int j = 0;
+    
+	for (j = 0; j < max_iterations; j++) {	/* loop limiter */
 		/*
 		 * make the secondary list our primary list, use
 		 * the data storage of the primary list as the
@@ -462,11 +472,18 @@ recalcNodeList(state_t *state)
 		 * all transistors controlled by this path, collecting
 		 * all nodes that changed because of it for the next run
 		 */
-		for (count_t i = 0; i < listin_count(state); i++) {
+        const count_t list_count = listin_count(state);
+		for (count_t i = 0; i < list_count; i++) {
 			nodenum_t n = listin_get(state, i);
 			recalcNode(state, n);
 		}
 	}
+    
+    if (j == max_iterations) {
+        fprintf(stderr,"### recalcNodeList max iterations hit, listin.count = %d\n", listin_count(state));
+    }
+    
+    /* without this, we'll have a bogus listin on the next step */
 	listout_clear(state);
 }
 
@@ -479,9 +496,10 @@ recalcNodeList(state_t *state)
 static inline void
 add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b)
 {
+    /* O(N^2) algorithm, but only run once at initialization */
 	for (count_t g = 0; g < state->nodes_dependants[a]; g++)
-	if (state->nodes_dependant[a][g] == b)
-	return;
+        if (state->nodes_dependant[a][g] == b)
+            return;
 
 	state->nodes_dependant[a][state->nodes_dependants[a]++] = b;
 }
@@ -489,9 +507,10 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b)
 static inline void
 add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
 {
+    /* O(N^2) algorithm, but only run once at initialization */
 	for (count_t g = 0; g < state->nodes_left_dependants[a]; g++)
-	if (state->nodes_left_dependant[a][g] == b)
-	return;
+        if (state->nodes_left_dependant[a][g] == b)
+            return;
 
 	state->nodes_left_dependant[a][state->nodes_left_dependants[a]++] = b;
 }

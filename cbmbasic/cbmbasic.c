@@ -18,7 +18,7 @@ Intel Xeon 3.4 Ghz
 original speed: 19677 steps per second
 original memory usage: 18.8 MB
 
-current speed: 22018 steps per second
+current speed: 22664 steps per second
 current memory usage: 1.1 MB
 
 */
