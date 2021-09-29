@@ -430,14 +430,16 @@ recalcNode(state_t *state, nodenum_t node)
 			}
 
 			if (newv) {
-                const nodenum_t dep_left_count = state->nodes_left_dep_count[nn];
-                const nodenum_t *deps_left = state->dependent_block + state->nodes_left_dependant[nn];
+                const nodenum_t dep_offset = state->nodes_left_dependant[nn];
+                const nodenum_t dep_left_count = state->nodes_left_dependant[nn+1] - dep_offset;
+                const nodenum_t *deps_left = state->dependent_block + dep_offset;
 				for (count_t g = 0; g < dep_left_count; g++) {
 					listout_add(state, deps_left[g]);
 				}
 			} else {
-                const nodenum_t dep_count = state->nodes_dep_count[nn];
-                const nodenum_t *deps = state->dependent_block + state->nodes_dependant[nn];
+                const nodenum_t dep_offset = state->nodes_dependant[nn];
+                const nodenum_t dep_count = state->nodes_dependant[nn+1] - dep_offset;
+                const nodenum_t *deps = state->dependent_block + dep_offset;
 				for (count_t g = 0; g < dep_count; g++) {
 					listout_add(state, deps[g]);
 				}
@@ -530,8 +532,11 @@ add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
     Working set = 207 KB allocations, 220 KB binary, plus system libs
                 = 1.1 MB in release build
     
-    down to 188K
-    Now 168K KB allocations and 23737 steps/second
+    down to 188K after nodes_gates
+    down to 168K after dependencies and left_dependencies
+    down to 145K after removing dep_counts
+    
+    Now 145K KB allocations and 23737 steps/second
     
 */
 state_t *
@@ -547,6 +552,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     /* chip state - remains static during simulation */
 	state->nodes_gatecount = calloc(state->nodes, sizeof(*state->nodes_gatecount));
 	state->nodes_c1c2offset = calloc(state->nodes + 1, sizeof(*state->nodes_c1c2offset));
+    
 	state->nodes_dep_count = calloc(state->nodes, sizeof(*state->nodes_dep_count));
 	state->nodes_left_dep_count = calloc(state->nodes, sizeof(*state->nodes_left_dep_count));
     
@@ -715,12 +721,7 @@ could also move to differences if needed, but we don't often use the counts
     nodenum_t *block_dep = calloc( block_dep_size, sizeof(*state->nodes_dependant) );
     state->dependent_block = block_dep;
     
-    /* Assign pointers from our larger block, using only counts needed
-TODO: ccox - should this use offsets like the c1c2 list?????
-state->nodes_dependant[i]           becomes state->dependent_block + state->nodes_dependant[i]
-TODO: ccox - should this use differences like c1c2 list?
-TODO: ccox - is there any reason to interleave the left and right data?  is there anywhere that would improve caching?
-    */
+    /* Assign pointers from our larger block, using only counts needed */
     state->nodes_dependant = malloc((nodes+1) * sizeof(*state->nodes_dependant));
     nodenum_t dep_index = 0;
     for (i = 0; i < state->nodes; i++) {
@@ -728,7 +729,7 @@ TODO: ccox - is there any reason to interleave the left and right data?  is ther
         state->nodes_dependant[i] = dep_index;
         dep_index += count;
     }
-    state->nodes_dependant[state->nodes] = dep_index;  /* TODO: ccox - if we want to use differences */
+    state->nodes_dependant[state->nodes] = dep_index;
     
     state->nodes_left_dependant = malloc((nodes+1) * sizeof(*state->nodes_left_dependant));
     for (i = 0; i < state->nodes; i++) {
@@ -736,7 +737,7 @@ TODO: ccox - is there any reason to interleave the left and right data?  is ther
         state->nodes_left_dependant[i] = dep_index;
         dep_index += count;
     }
-    state->nodes_left_dependant[state->nodes] = dep_index;  /* TODO: ccox - if we want to use differences */
+    state->nodes_left_dependant[state->nodes] = dep_index;
     
     /* Copy dependencies into smaller data structures */
     for (i = 0; i < state->nodes; i++) {
@@ -760,6 +761,10 @@ TODO: ccox - is there any reason to interleave the left and right data?  is ther
             }
         }
     }
+    free(state->nodes_dep_count);
+    free(state->nodes_left_dep_count);
+    state->nodes_dep_count = NULL;
+    state->nodes_left_dep_count = NULL;
 
 #if 0 /* unnecessary - RESET will stabilize the network anyway */
 	/* all nodes are down */
@@ -785,8 +790,6 @@ destroyNodesAndTransistors(state_t *state)
     free(state->nodes_c1c2s);
     free(state->nodes_gatecount);
     free(state->nodes_c1c2offset);
-    free(state->nodes_dep_count);
-    free(state->nodes_left_dep_count);
     free(state->dependent_block);
     free(state->transistors_gate);
     free(state->transistors_c1);
