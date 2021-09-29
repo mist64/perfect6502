@@ -145,7 +145,7 @@ handleMemory(void *state)
  *
  ************************************************************/
 
-unsigned int cycle;
+unsigned long cycle;
 
 void
 step(void *state)
@@ -218,7 +218,7 @@ chipStatus(void *state)
 	uint8_t d = readDataBus(state);
 	BOOL r_w = isNodeHigh(state, rw);
 
-	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X",
+	printf("halfcyc:%ld phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X",
 		   cycle,
 		   clk,
 		   a,

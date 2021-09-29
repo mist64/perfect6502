@@ -499,14 +499,8 @@ add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
         block_gate_size = 3239
         block_dep_size = 7260
 
-    Memory used in debugger
-    Previous total mem = 25 MB                  19611 steps/sec
-    block dependents - 9.5 MB                   20760 steps/sec
-    block nodes - 3.6 MB                        20672 steps/sec
-
     Working set = 207 KB allocations, 220 KB binary, plus system libs
                 = 1.1 MB in release build
-
 */
 state_t *
 setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nodenum_t nodes, nodenum_t transistors, nodenum_t vss, nodenum_t vcc)
@@ -628,7 +622,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     state->node_block = block_gate;
     
     /* Assign pointer from our larger block, using only counts needed
-TODO: ccox - make this use offsets like the c1c2 list?????
+TODO: ccox - should this use offsets like the c1c2 list?????
     */
     state->nodes_gates = malloc(nodes * sizeof(*state->nodes_gates));
     for (i = 0; i < state->nodes; i++) {
@@ -680,7 +674,7 @@ TODO: ccox - make this use offsets like the c1c2 list?????
     state->dependent_block = block_dep;
     
     /* Assign pointers from our larger block, using only counts needed
-TODO: ccox - make this use offsets like the c1c2 list?????
+TODO: ccox - should this use offsets like the c1c2 list?????
     */
     state->nodes_dependant = malloc(nodes * sizeof(*state->nodes_dependant));
     for (i = 0; i < state->nodes; i++) {
