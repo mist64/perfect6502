@@ -496,7 +496,7 @@ recalcNodeList(state_t *state)
 static inline void
 add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b)
 {
-    /* O(N^2) algorithm, but only run once at initialization */
+    /* O(N^2) behavior, but only run once at initialization */
 	for (count_t g = 0; g < state->nodes_dependants[a]; g++)
         if (state->nodes_dependant[a][g] == b)
             return;
@@ -507,7 +507,7 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b)
 static inline void
 add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
 {
-    /* O(N^2) algorithm, but only run once at initialization */
+    /* O(N^2) behavior, but only run once at initialization */
 	for (count_t g = 0; g < state->nodes_left_dependants[a]; g++)
         if (state->nodes_left_dependant[a][g] == b)
             return;
@@ -590,6 +590,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 				 (state->transistors_c1[j2] == c2 &&
 				  state->transistors_c2[j2] == c1))) {
 					 found = YES;
+                     break;
 				 }
 		}
 		if (!found) {
@@ -608,9 +609,15 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	count_t c1c2total = 0;
 	for (i = 0; i < state->transistors; i++) {
 		nodenum_t gate = state->transistors_gate[i];
+        nodenum_t c1 = state->transistors_c1[i];
+        nodenum_t c2 = state->transistors_c2[i];
+        
+        if (gate >= nodes || c1 >= nodes || c2 >= nodes)
+            fprintf(stderr,"FATAL - bad transistor definition %d\n", i);
+        
 		state->nodes_gatecount[gate]++;
-		c1c2count[state->transistors_c1[i]]++;
-		c1c2count[state->transistors_c2[i]]++;
+		c1c2count[c1]++;
+		c1c2count[c2]++;
 		c1c2total += 2;
 	}
     
@@ -620,11 +627,11 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 		state->nodes_c1c2offset[i] = c1c2offset;
 		c1c2offset += c1c2count[i];
 	}
+	state->nodes_c1c2offset[i] = c1c2offset;    /* fill the end entry, so we can calculate distances/counts */
     
-	state->nodes_c1c2offset[i] = c1c2offset;
 	/* create and fill the nodes_c1c2s array according to these offsets */
 	state->nodes_c1c2s = calloc(c1c2total, sizeof(*state->nodes_c1c2s));
-	memset(c1c2count, 0, state->nodes * sizeof(*c1c2count));
+	memset(c1c2count, 0, state->nodes * sizeof(*c1c2count));    /* zero counts so we can reuse them */
 	for (i = 0; i < state->transistors; i++) {
 		nodenum_t c1 = state->transistors_c1[i];
 		nodenum_t c2 = state->transistors_c2[i];
