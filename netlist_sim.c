@@ -95,8 +95,6 @@ typedef struct {
     nodenum_t *node_block;
 	c1c2_t *nodes_c1c2s;
 	count_t *nodes_c1c2offset;
-	nodenum_t *nodes_dep_count;
-	nodenum_t *nodes_left_dep_count;
 	nodenum_t *nodes_dependant;
 	nodenum_t *nodes_left_dependant;
     nodenum_t *dependent_block;
@@ -488,29 +486,33 @@ recalcNodeList(state_t *state)
  ************************************************************/
 
 static inline void
-add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b)
+add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts, nodenum_t offset )
 {
-    /* O(N^2) behavior, but only run once at initialization */
-    nodenum_t *dependent_data = state->dependent_block + state->nodes_dependant[a];
-    const nodenum_t dep_count = state->nodes_dep_count[a];
+    /* O(N^2) behavior, but only run once at initialization
+    NOTE - counts are still being set and cannot be calculated from offsets
+    */
+    nodenum_t *dependent_data = state->dependent_block + offset;
+    const nodenum_t dep_count = counts[a];
 	for (count_t g = 0; g < dep_count; g++)
         if (dependent_data[g] == b)
             return;
 
-	dependent_data[state->nodes_dep_count[a]++] = b;
+	dependent_data[ counts[a]++ ] = b;
 }
 
 static inline void
-add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
+add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts, nodenum_t offset)
 {
-    /* O(N^2) behavior, but only run once at initialization */
-    nodenum_t *dependent_data = state->dependent_block + state->nodes_left_dependant[a];
-    const nodenum_t dep_count = state->nodes_left_dep_count[a];
+    /* O(N^2) behavior, but only run once at initialization
+    NOTE - counts are still being set and cannot be calculated from offsets
+    */
+    nodenum_t *dependent_data = state->dependent_block + offset;
+    const nodenum_t dep_count = counts[a];
 	for (count_t g = 0; g < dep_count; g++)
         if (dependent_data[g] == b)
             return;
 
-	dependent_data[state->nodes_left_dep_count[a]++] = b;
+	dependent_data[ counts[a]++ ] = b;
 }
 
 
@@ -546,10 +548,6 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     /* chip state - remains static during simulation */
 	state->nodes_c1c2offset = calloc(state->nodes + 1, sizeof(*state->nodes_c1c2offset));
     
-	state->nodes_dep_count = calloc(state->nodes, sizeof(*state->nodes_dep_count));
-	state->nodes_left_dep_count = calloc(state->nodes, sizeof(*state->nodes_left_dep_count));
-    
-    /* simulation state - changes during simulation */
 	state->nodes_pullup = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pullup));
 	state->nodes_pulldown = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pulldown));
 	state->nodes_value = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_value));
@@ -571,6 +569,8 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     
     
     /* these are only used in initialization */
+	nodenum_t *nodes_dep_count = calloc(state->nodes, sizeof(nodenum_t));
+	nodenum_t *nodes_left_dep_count = calloc(state->nodes, sizeof(nodenum_t));
 	count_t *nodes_gatecount = calloc(state->nodes, sizeof(count_t));
 	nodenum_t *transistors_gate = calloc(state->transistors, sizeof(nodenum_t));
 	nodenum_t *transistors_c1 = calloc(state->transistors, sizeof(nodenum_t));
@@ -663,7 +663,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     nodenum_t *block_gate = calloc( block_gate_size, sizeof(*state->nodes_gates) );
     state->node_block = block_gate;
     
-    /* Assign pointer from our larger block, using only counts needed */
+    /* Assign offsets from our larger block */
     state->nodes_gates = malloc((nodes+1) * sizeof(*state->nodes_gates));
     nodenum_t node_index = 0;
     for (i = 0; i < state->nodes; i++) {
@@ -686,39 +686,39 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
         Must happen after gatecount and nodes_gates assignments!
     */
     for (i = 0; i < state->nodes; i++) {
-        state->nodes_dep_count[i] = 0;
-        state->nodes_left_dep_count[i] = 0;
+        nodes_dep_count[i] = 0;
+        nodes_left_dep_count[i] = 0;
         nodenum_t *gate_data = state->node_block + state->nodes_gates[i];
         for (count_t g = 0; g < nodes_gatecount[i]; g++) {
             nodenum_t t = gate_data[g];
             nodenum_t c1 = transistors_c1[t];
             if (c1 != vss && c1 != vcc) {
-                state->nodes_dep_count[i]++;
+                nodes_dep_count[i]++;
             }
             nodenum_t c2 = transistors_c2[t];
             if (c2 != vss && c2 != vcc) {
-                state->nodes_dep_count[i]++;
+                nodes_dep_count[i]++;
             }
-            state->nodes_left_dep_count[i]++;
+            nodes_left_dep_count[i]++;
         }
     }
     
 	/* Sum the counts to find total size of the dependents array */
     size_t block_dep_size = 0;
     for (i = 0; i < state->nodes; i++) {
-        block_dep_size += state->nodes_dep_count[i];
-        block_dep_size += state->nodes_left_dep_count[i];
+        block_dep_size += nodes_dep_count[i];
+        block_dep_size += nodes_left_dep_count[i];
     }
     
     /* Allocate the dependents block all at once */
     nodenum_t *block_dep = calloc( block_dep_size, sizeof(*state->nodes_dependant) );
     state->dependent_block = block_dep;
     
-    /* Assign pointers from our larger block, using only counts needed */
+    /* Assign offsets from our larger block, using only counts needed */
     state->nodes_dependant = malloc((nodes+1) * sizeof(*state->nodes_dependant));
     nodenum_t dep_index = 0;
     for (i = 0; i < state->nodes; i++) {
-        nodenum_t count = state->nodes_dep_count[i];
+        nodenum_t count = nodes_dep_count[i];
         state->nodes_dependant[i] = dep_index;
         dep_index += count;
     }
@@ -726,7 +726,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     
     state->nodes_left_dependant = malloc((nodes+1) * sizeof(*state->nodes_left_dependant));
     for (i = 0; i < state->nodes; i++) {
-        nodenum_t count = state->nodes_left_dep_count[i];
+        nodenum_t count = nodes_left_dep_count[i];
         state->nodes_left_dependant[i] = dep_index;
         dep_index += count;
     }
@@ -734,33 +734,32 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     
     /* Copy dependencies into smaller data structures */
     for (i = 0; i < state->nodes; i++) {
-        state->nodes_dep_count[i] = 0;
-        state->nodes_left_dep_count[i] = 0;
+        nodes_dep_count[i] = 0;
+        nodes_left_dep_count[i] = 0;
         nodenum_t *gate_data = state->node_block + state->nodes_gates[i];
         for (count_t g = 0; g < nodes_gatecount[i]; g++) {
             nodenum_t t = gate_data[g];
             nodenum_t c1 = transistors_c1[t];
             if (c1 != vss && c1 != vcc) {
-                add_nodes_dependant(state, i, c1);
+                add_nodes_dependant(state, i, c1, nodes_dep_count, state->nodes_dependant[i]);
             }
             nodenum_t c2 = transistors_c2[t];
             if (c2 != vss && c2 != vcc) {
-                add_nodes_dependant(state, i, c2);
+                add_nodes_dependant(state, i, c2, nodes_dep_count, state->nodes_dependant[i]);
             }
             if (c1 != vss && c1 != vcc) {
-                add_nodes_left_dependant(state, i, c1);
+                add_nodes_left_dependant(state, i, c1, nodes_left_dep_count, state->nodes_left_dependant[i]);
             } else {
-                add_nodes_left_dependant(state, i, c2);
+                add_nodes_left_dependant(state, i, c2, nodes_left_dep_count, state->nodes_left_dependant[i]);
             }
         }
     }
-    /* these are unused after initialization - but are still used in subroutines */
-    free(state->nodes_dep_count);
-    state->nodes_dep_count = NULL;
-    free(state->nodes_left_dep_count);
-    state->nodes_left_dep_count = NULL;
     
     /* these are unused after initialization */
+    free(nodes_dep_count);
+    nodes_dep_count = NULL;
+    free(nodes_left_dep_count);
+    nodes_left_dep_count = NULL;
     free(nodes_gatecount);
     nodes_gatecount = NULL;
     free(transistors_gate);
@@ -778,7 +777,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	}
 	/* all transistors are off */
 	for (transnum_t tn = 0; tn < state->transistors; tn++)
-	set_transistors_on(state, tn, NO);
+        set_transistors_on(state, tn, NO);
 #endif
 
 	return state;
@@ -856,5 +855,5 @@ void
 writeNodes(state_t *state, int count, nodenum_t *nodelist, int v)
 {
 	for (int i = 0; i < 8; i++, v >>= 1)
-	setNode(state, nodelist[i], v & 1);
+        setNode(state, nodelist[i], v & 1);
 }
