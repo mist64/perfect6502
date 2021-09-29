@@ -264,7 +264,7 @@ listout_clear(state_t *state)
 static inline void
 listout_add(state_t *state, nodenum_t i)
 {
-	if (!get_bitmap(state->listout_bitmap, i)) {
+	if (get_bitmap(state->listout_bitmap, i) == 0) {
 		state->listout.list[state->listout.count++] = i;
 		set_bitmap(state->listout_bitmap, i, 1);
 	}
@@ -358,10 +358,11 @@ addNodeToGroup(state_t *state, nodenum_t n)
     /* state can remain at contains_nothing if the node value is low */
 
 	/* revisit all transistors that control this node */
-    count_t start = state->nodes_c1c2offset[n];
-	count_t end = state->nodes_c1c2offset[n+1];
+    const count_t start = state->nodes_c1c2offset[n];
+	const count_t end = state->nodes_c1c2offset[n+1];
+    const c1c2_t *node_c1c2s = state->nodes_c1c2s;
 	for (count_t t = start; t < end; t++) {
-		c1c2_t c = state->nodes_c1c2s[t];
+		const c1c2_t c = node_c1c2s[t];
 		/* if the transistor connects c1 and c2... */
 		if (get_transistors_on(state, c.transistor)) {
 			addNodeToGroup(state, c.other_node);
@@ -416,18 +417,24 @@ recalcNode(state_t *state, nodenum_t node)
 		nodenum_t nn = group_get(state, i);
 		if (get_nodes_value(state, nn) != newv) {
 			set_nodes_value(state, nn, newv);
-			for (count_t t = 0; t < state->nodes_gatecount[nn]; t++) {
-				transnum_t tn = state->nodes_gates[nn][t];
+            const count_t gate_count = state->nodes_gatecount[nn];
+            const nodenum_t *gates = state->nodes_gates[nn];
+			for (count_t t = 0; t < gate_count; t++) {
+				transnum_t tn = gates[t];
 				set_transistors_on(state, tn, newv);
 			}
 
 			if (newv) {
-				for (count_t g = 0; g < state->nodes_left_dependants[nn]; g++) {
-					listout_add(state, state->nodes_left_dependant[nn][g]);
+                const nodenum_t dep_left_count = state->nodes_left_dependants[nn];
+                const nodenum_t *deps_left = state->nodes_left_dependant[nn];
+				for (count_t g = 0; g < dep_left_count; g++) {
+					listout_add(state, deps_left[g]);
 				}
 			} else {
-				for (count_t g = 0; g < state->nodes_dependants[nn]; g++) {
-					listout_add(state, state->nodes_dependant[nn][g]);
+                const nodenum_t dep_count = state->nodes_dependants[nn];
+                const nodenum_t *deps = state->nodes_dependant[nn];
+				for (count_t g = 0; g < dep_count; g++) {
+					listout_add(state, deps[g]);
 				}
 			}
 		}
