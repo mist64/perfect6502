@@ -500,22 +500,6 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts,
 	dependent_data[ counts[a]++ ] = b;
 }
 
-static inline void
-add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts, nodenum_t offset)
-{
-    /* O(N^2) behavior, but only run once at initialization
-    NOTE - counts are still being set and cannot be calculated from offsets
-    */
-    nodenum_t *dependent_data = state->dependent_block + offset;
-    const nodenum_t dep_count = counts[a];
-	for (count_t g = 0; g < dep_count; g++)
-        if (dependent_data[g] == b)
-            return;
-
-	dependent_data[ counts[a]++ ] = b;
-}
-
-
 /*  6502:
         3288 transistors, 3239 used in simulation after duplicate removal
         1725 entries in node list and used in simulation
@@ -748,9 +732,9 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
                 add_nodes_dependant(state, i, c2, nodes_dep_count, state->nodes_dependant[i]);
             }
             if (c1 != vss && c1 != vcc) {
-                add_nodes_left_dependant(state, i, c1, nodes_left_dep_count, state->nodes_left_dependant[i]);
+                add_nodes_dependant(state, i, c1, nodes_left_dep_count, state->nodes_left_dependant[i]);
             } else {
-                add_nodes_left_dependant(state, i, c2, nodes_left_dep_count, state->nodes_left_dependant[i]);
+                add_nodes_dependant(state, i, c2, nodes_left_dep_count, state->nodes_left_dependant[i]);
             }
         }
     }
