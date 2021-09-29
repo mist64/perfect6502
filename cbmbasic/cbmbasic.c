@@ -18,8 +18,7 @@ original speed: 19611 to 19677 steps per second
 original memory usage: 21.4 MB
 
 current speed: 20578 to 20834 steps per second
-current memory usage: 9.5 MB
-
+current memory usage: 3.5 MB
 
 */
 
