@@ -517,7 +517,7 @@ add_nodes_left_dependant(state_t *state, nodenum_t a, nodenum_t b)
 
 
 /*  6502:
-        3510 transistors, 3239 used in simulation after duplicate removal
+        3288 transistors, 3239 used in simulation after duplicate removal
         1725 entries in node list and used in simulation
         c1c2total = 6478
         block_gate_size = 3239
@@ -792,7 +792,7 @@ void
 stabilizeChip(state_t *state)
 {
 	for (count_t i = 0; i < state->nodes; i++)
-	listout_add(state, i);
+        listout_add(state, i);
 
 	recalcNodeList(state);
 }
@@ -806,11 +806,11 @@ stabilizeChip(state_t *state)
 void
 setNode(state_t *state, nodenum_t nn, BOOL s)
 {
-        set_nodes_pullup(state, nn, s);
-        set_nodes_pulldown(state, nn, !s);
-        listout_add(state, nn);
+    set_nodes_pullup(state, nn, s);
+    set_nodes_pulldown(state, nn, !s);
+    listout_add(state, nn);
 
-        recalcNodeList(state);
+    recalcNodeList(state);
 }
 
 BOOL

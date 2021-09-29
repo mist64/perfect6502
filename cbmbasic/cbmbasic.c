@@ -18,7 +18,7 @@ Intel Xeon 3.4 Ghz
 original speed: 19677 steps per second
 original memory usage: 18.8 MB
 
-current speed: 22864 steps per second
+current speed: 23480 steps per second
 current memory usage: 1.1 MB
 
 */
@@ -50,7 +50,7 @@ main()
             end_time = clock();
             double time = (end_time - start_time)/ (double)(CLOCKS_PER_SEC);
             double speed = cycle / time;
-            printf("cycle %u, speed %g steps per second\n", cycle, speed);
+            printf("cycle %lu, speed %g steps per second\n", cycle, speed);
         }
 
 	};
