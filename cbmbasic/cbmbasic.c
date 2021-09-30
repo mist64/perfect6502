@@ -13,34 +13,24 @@ See https://www.c64-wiki.com/wiki/C64-Commands
 30 END
 RUN
 
-
-Intel Xeon 3.4 Ghz
-original speed: 19677 steps per second
-original memory usage: 18.8 MB
-
-current speed: 24614 steps per second
-current memory usage: 604 KB
-
-
-Apple M1 2.4 Ghz
-current speed: 32368 steps per second
-current memory usage: 1 MB  (appears to be due to larger page size)
-
 */
+
+#define SHOW_AVG_SPEED      0
 
 int
 main()
 {
 	int clk = 0;
  
-    clock_t start_time, end_time;
-
 	void *state = initAndResetChip();
 
 	/* set up memory for user program */
 	init_monitor();
-    
-    start_time = clock();
+
+#if SHOW_AVG_SPEED
+    clock_t end_time;
+    clock_t start_time = clock();
+#endif
 
 	/* emulate the 6502! */
 	for (;;) {
@@ -49,14 +39,18 @@ main()
 		if (clk)
 			handle_monitor(state);
 
-//		chipStatus(state);
+/*		chipStatus(state);
+*/
 
+#if SHOW_AVG_SPEED
 		if ( (cycle % 20000) == 0 ) {
             end_time = clock();
             double time = (end_time - start_time)/ (double)(CLOCKS_PER_SEC);
             double speed = cycle / time;
             printf("cycle %lu, speed %g steps per second\n", cycle, speed);
         }
+#endif
 
-	};
+	}   /* end infinite loop */
+
 }
