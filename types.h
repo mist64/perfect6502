@@ -3,13 +3,13 @@
 
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
-typedef unsigned int BOOL;
+typedef unsigned char BOOL;
 typedef uint16_t nodenum_t;
 
 typedef struct {
-	int gate;
-	int c1;
-	int c2;
+	nodenum_t gate;
+	nodenum_t c1;
+	nodenum_t c2;
 } netlist_transdefs;
 
 #define YES 1

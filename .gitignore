@@ -1,3 +1,5 @@
+build
+*.xcodeproj
 # emacs-style backup files
 *~
 # patch detritus
@@ -6,3 +8,4 @@
 # object files
 cbmbasic
 *.o
+

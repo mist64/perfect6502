@@ -162,7 +162,7 @@ init_os(int argc, char **argv) {
 		if (fgetc(input_file)=='#') {
 			char c;
 			do {
-				c = fgetc(input_file);
+				c = (char) fgetc(input_file);
 			} while((c!=13)&&(c!=10));
 		} else {
 			fseek(input_file, 0, SEEK_SET);
@@ -182,13 +182,13 @@ int plugin = 0;
 
 void
 replace_vector(unsigned short address, unsigned short new, unsigned short *old) {
-	*old = RAM[address] | (RAM[address+1]<<8);
+	*old = (unsigned short)( (unsigned short)RAM[address] | (((unsigned short)RAM[address+1])<<8) );
 	RAM[address] = (new)&0xFF;
 	RAM[address+1] = (new)>>8;
 }
 
 void
-plugin_on() {
+plugin_on(void) {
 	if (plugin)
 		return;
 
@@ -203,7 +203,7 @@ plugin_on() {
 }
 
 static void
-plugin_off() {
+plugin_off(void) {
 	unsigned short dummy;
 
 	if (!plugin)
@@ -220,13 +220,13 @@ plugin_off() {
 }
 
 static void
-SETMSG() {
+SETMSG(void) {
 		kernal_msgflag = A;
 		A = kernal_status;
 }
 
 static void
-MEMTOP() {
+MEMTOP(void) {
 #if DEBUG /* CBMBASIC doesn't do this */
 	if (!C) {
 		printf("UNIMPL: set top of RAM");
@@ -245,7 +245,7 @@ MEMTOP() {
 
 /* MEMBOT */
 static void
-MEMBOT() {
+MEMBOT(void) {
 #if DEBUG /* CBMBASIC doesn't do this */
 	if (!C) {
 		printf("UNIMPL: set bot of RAM");
@@ -258,13 +258,13 @@ MEMBOT() {
 
 /* READST */
 static void
-READST() {
+READST(void) {
 		A = kernal_status;
 }
 
 /* SETLFS */
 static void
-SETLFS() {
+SETLFS(void) {
 		kernal_lfn = A;
 		kernal_dev = X;
 		kernal_sec = Y;
@@ -272,14 +272,14 @@ SETLFS() {
 
 /* SETNAM */
 static void
-SETNAM() {
-		kernal_filename = X | Y<<8;
+SETNAM(void) {
+		kernal_filename = (unsigned short)( ((unsigned short)X) | (((unsigned short)Y)<<8) );
 		kernal_filename_len = A;
 }
 
 /* OPEN */
 static void
-OPEN() {
+OPEN(void) {
     kernal_status = 0;
     if (kernal_files[kernal_lfn]) {
         C = 1;
@@ -305,7 +305,7 @@ OPEN() {
 
 /* CLOSE */
 static void
-CLOSE() {
+CLOSE(void) {
     if (!kernal_files[kernal_lfn]) {
         C = 1;
         A = KERN_ERR_FILE_NOT_OPEN;
@@ -318,7 +318,7 @@ CLOSE() {
 
 /* CHKIN */
 static void
-CHKIN() {
+CHKIN(void) {
     kernal_status = 0;
     if (!kernal_files[X]) {
         C = 1;
@@ -332,7 +332,7 @@ CHKIN() {
 
 /* CHKOUT */
 static void
-CHKOUT() {
+CHKOUT(void) {
     kernal_status = 0;
     if (!kernal_files[X]) {
         C = 1;
@@ -346,7 +346,7 @@ CHKOUT() {
 
 /* CLRCHN */
 static void
-CLRCHN() {
+CLRCHN(void) {
     kernal_input = 0;
     kernal_output = 0;
 }
@@ -358,7 +358,7 @@ int fakerun_index = 0;
 
 /* CHRIN */
 static void
-CHRIN() {
+CHRIN(void) {
 	if ((!interactive) && (readycount==2)) {
 		exit(0);
 	}
@@ -370,25 +370,25 @@ CHRIN() {
 		} else {
 			if (kernal_files_next[kernal_input] == EOF)
 				kernal_files_next[kernal_input] = fgetc(kernal_files[kernal_input]);
-			A = kernal_files_next[kernal_input];
+			A = (unsigned char) kernal_files_next[kernal_input];
 			kernal_files_next[kernal_input] = fgetc(kernal_files[kernal_input]);
 			if (kernal_files_next[kernal_input] == EOF)
 				kernal_status |= KERN_ST_EOF;
 		}
 	} else if (!input_file) {
-		A = getchar(); /* stdin */
+		A = (unsigned char) getchar(); /* stdin */
 		if (A=='\n') A = '\r';
 	} else {
 		if (fakerun) {
-			A = run[fakerun_index++];
+			A = (unsigned char) run[fakerun_index++];
 			if (fakerun_index==sizeof(run))
 				input_file = 0; /* switch to stdin */
 		} else {
-			A = fgetc(input_file);
+			A = (unsigned char) fgetc(input_file);
 			if ((A==255)&&(readycount==1)) {
 				fakerun = 1;
 				fakerun_index = 0;
-				A = run[fakerun_index++];
+				A = (unsigned char) run[fakerun_index++];
 			}
 			if (A=='\n') A = '\r';
 		}
@@ -398,7 +398,7 @@ CHRIN() {
 
 /* CHROUT */
 static void
-CHROUT() {
+CHROUT(void) {
 //return;
 //exit(1);
 #if 0
@@ -550,7 +550,7 @@ printf("CHROUT: %d @ %x,%x,%x,%x\n", A, a, b, c, d);
 
 /* LOAD */
 static void
-LOAD() {
+LOAD(void) {
 		FILE *f;
 		struct stat st;
 		unsigned short start;
@@ -599,13 +599,13 @@ LOAD() {
 			while ((dp = readdir(dirp))) {
 				size_t namlen = strlen(dp->d_name);
 				stat(dp->d_name, &st);
-				file_size = (st.st_size + 253)/254; /* convert file size from num of bytes to num of blocks(254 bytes) */
+				file_size = (int) ((st.st_size + 253)/254); /* convert file size from num of bytes to num of blocks(254 bytes) */
 				if (file_size>0xFFFF)
 					file_size = 0xFFFF;
 				old_memp = memp;
 				memp += 2;
-				RAM[memp++] = file_size & 0xFF;
-				RAM[memp++] = file_size >> 8;
+				RAM[memp++] = (unsigned char)(file_size & 0xFF);
+				RAM[memp++] = (unsigned char)(file_size >> 8);
 				if (file_size<1000) {
 					RAM[memp++] = ' ';
 					if (file_size<100) {
@@ -621,7 +621,7 @@ LOAD() {
 				memcpy(&RAM[memp], dp->d_name, namlen);
 				memp += namlen;
 				RAM[memp++] = '"';
-				for (i=namlen; i<16; i++)
+				for (i=(int)namlen; i<16; i++)
 					RAM[memp++] = ' ';
 				RAM[memp++] = ' ';
 				RAM[memp++] = 'P';
@@ -667,10 +667,10 @@ for (i=0; i<255; i++) {
 		f = fopen((char*)&RAM[kernal_filename], "rb");
 		if (!f)
 			goto file_not_found;
-		start = ((unsigned char)fgetc(f)) | ((unsigned char)fgetc(f))<<8;
+		start = (unsigned short)( (unsigned char)fgetc(f) | (((unsigned short)fgetc(f))<<8) );
 		if (!kernal_sec)
-			start = X | Y<<8;
-		end = start + fread(&RAM[start], 1, 65536-start, f); /* TODO may overwrite ROM */
+			start = (unsigned short)(X | (((unsigned short)Y)<<8) );
+		end = (unsigned short)( start + fread(&RAM[start], 1, 65536-start, f) ); /* TODO may overwrite ROM */
 		printf("LOADING FROM $%04X to $%04X\n", start, end);
 		fclose(f);
 
@@ -696,14 +696,14 @@ missing_file_name:
 
 /* SAVE */
 static void
-SAVE() {
+SAVE(void) {
 		FILE *f;
 		unsigned char savedbyte;
 		unsigned short start;
 		unsigned short end;
 
-		start = RAM[A] | RAM[A+1]<<8;
-		end = X | Y << 8;
+		start = (unsigned short)( RAM[A] | (((unsigned short)RAM[A+1])<<8) );
+		end = (unsigned short)( X | (((unsigned short)Y) << 8) );
 		if (end<start) {
 			C = 1;
 			A = KERN_ERR_NONE;
@@ -732,7 +732,7 @@ SAVE() {
 
 /* SETTIM */
 static void
-SETTIM() {
+SETTIM(void) {
     unsigned long   jiffies = Y*65536 + X*256 + A;
     unsigned long   seconds = jiffies/60;
 #ifdef _WIN32
@@ -751,9 +751,9 @@ SETTIM() {
     
     localtime_r(&now, &bd);
 
-    bd.tm_sec       = seconds%60;
-    bd.tm_min       = seconds/60;
-    bd.tm_hour      = seconds/3600;
+    bd.tm_sec       = (int)(seconds%60);
+    bd.tm_min       = (int)(seconds/60);
+    bd.tm_hour      = (int)(seconds/3600);
 
     tv.tv_sec   = mktime(&bd);
     tv.tv_usec  = (jiffies % 60) * (1000000/60);
@@ -764,7 +764,7 @@ SETTIM() {
 
 /* RDTIM */
 static void
-RDTIM() {
+RDTIM(void) {
 	unsigned long   jiffies;
 #ifdef _WIN32
 	SYSTEMTIME st;
@@ -779,7 +779,7 @@ RDTIM() {
     localtime_r(&now, &bd);
     gettimeofday(&tv, 0);
     
-    jiffies = ((bd.tm_hour*60 + bd.tm_min)*60 + bd.tm_sec)*60 + tv.tv_usec / (1000000/60);
+    jiffies = (unsigned long)( ((bd.tm_hour*60 + bd.tm_min)*60 + bd.tm_sec)*60 + tv.tv_usec / (1000000/60) );
 #endif
     Y   = (unsigned char)(jiffies/65536);
     X   = (unsigned char)((jiffies%65536)/256);
@@ -789,13 +789,13 @@ RDTIM() {
 
 /* STOP */
 static void
-STOP() {
+STOP(void) {
 		SETZ(0); /* TODO we don't support the STOP key */
 }
 
 /* GETIN */
 static void
-GETIN() {
+GETIN(void) {
     if (kernal_input != 0) {
         if (feof(kernal_files[kernal_input])) {
             kernal_status |= KERN_ST_EOF;
@@ -804,7 +804,7 @@ GETIN() {
         } else {
             if (kernal_files_next[kernal_input] == EOF)
                 kernal_files_next[kernal_input] = fgetc(kernal_files[kernal_input]);
-            A = kernal_files_next[kernal_input];
+            A = (unsigned char) kernal_files_next[kernal_input];
             kernal_files_next[kernal_input] = fgetc(kernal_files[kernal_input]);
             if (kernal_files_next[kernal_input] == EOF)
                 kernal_status |= KERN_ST_EOF;
@@ -813,11 +813,11 @@ GETIN() {
     } else {
 #ifdef _WIN32
         if (_kbhit())
-            A = _getch();
+            A = (unsigned char) _getch();
         else
             A = 0;
 #else
-        A = getchar();
+        A = (unsigned char) getchar();
 #endif
         if (A=='\n') A = '\r';
         C = 0;
@@ -826,8 +826,8 @@ GETIN() {
 
 /* CLALL */
 static void
-CLALL() {
-    int i;
+CLALL(void) {
+    size_t i;
     for (i = 0; i < sizeof(kernal_files)/sizeof(kernal_files[0]); ++i) {
         if (kernal_files[i]) {
             fclose(kernal_files[i]);
@@ -838,12 +838,12 @@ CLALL() {
 
 /* PLOT */
 static void
-PLOT() {
+PLOT(void) {
     if (C) {
         int CX, CY;
         get_cursor(&CX, &CY);
-        Y = CX;
-        X = CY;
+        Y = (unsigned char) CX;
+        X = (unsigned char) CY;
     } else {
         printf("UNIMPL: set cursor %d %d\n", Y, X);
         exit(1);
@@ -853,7 +853,7 @@ PLOT() {
 
 /* IOBASE */
 static void
-IOBASE() {
+IOBASE(void) {
 #define CIA 0xDC00 /* we could put this anywhere... */
 		/*
 		 * IOBASE is just used inside RND to get a timer value.
@@ -863,19 +863,19 @@ IOBASE() {
 		 */
 		int pseudo_timer;
 		pseudo_timer = rand();
-		RAM[CIA+4] = pseudo_timer&0xff;
-		RAM[CIA+5] = pseudo_timer>>8;
+		RAM[CIA+4] = (unsigned char) (pseudo_timer&0xff);
+		RAM[CIA+5] = (unsigned char) (pseudo_timer>>8);
 		pseudo_timer = rand(); /* more entropy! */
-		RAM[CIA+8] = pseudo_timer&0xff;
-		RAM[CIA+9] = pseudo_timer>>8;
+		RAM[CIA+8] = (unsigned char) (pseudo_timer&0xff);
+		RAM[CIA+9] = (unsigned char) (pseudo_timer>>8);
 		X = CIA & 0xFF;
 		Y = CIA >> 8;
 }
 
 int
-kernal_dispatch() {
+kernal_dispatch(void) {
 //{ printf("kernal_dispatch $%04X; ", PC); int i; printf("stack (%02X): ", S); for (i=S+1; i<0x100; i++) { printf("%02X ", RAM[0x0100+i]); } printf("\n"); }
-	unsigned int new_pc;
+	unsigned short new_pc;
 	switch(PC) {
 		case 0x0073:	CHRGET();	break;
 		case 0x0079:	CHRGOT();	break;

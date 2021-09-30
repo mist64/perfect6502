@@ -1,7 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <errno.h>
 #include <stdlib.h>
-#include <windows.h>	// FindFirstFile, FindNextFile
+//#include <windows.h>	// FindFirstFile, FindNextFile
 #include "readdir.h"
 
 typedef struct dir_private
