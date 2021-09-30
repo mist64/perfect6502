@@ -18,8 +18,13 @@ Intel Xeon 3.4 Ghz
 original speed: 19677 steps per second
 original memory usage: 18.8 MB
 
-current speed: 23480 steps per second
-current memory usage: 1.1 MB
+current speed: 24614 steps per second
+current memory usage: 604 KB
+
+
+Apple M1 2.4 Ghz
+current speed: 32368 steps per second
+current memory usage: 1 MB  (appears to be due to larger page size)
 
 */
 
