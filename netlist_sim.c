@@ -387,6 +387,8 @@ getGroupValue(state_t *state)
 		case contains_nothing:
 			return NO;
 	}
+
+        abort();
 }
 
 static inline void
