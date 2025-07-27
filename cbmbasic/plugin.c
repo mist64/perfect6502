@@ -56,8 +56,9 @@
 #include "console.h"
 
 static unsigned short
-get_chrptr() {
-	return RAM[0x7A] | RAM[0x7B]<<8;
+get_chrptr(void) {
+	return (unsigned short)(((unsigned short)RAM[0x7A])
+                        | (((unsigned short)RAM[0x7B])<<8));
 }
 
 static void
@@ -98,19 +99,19 @@ call(unsigned short pc) {
 }
 
 static void
-check_comma() {
+check_comma(void) {
 	call(0xAEFD);
 }
 
 static unsigned short
-get_word() {
+get_word(void) {
 	call(0xAD8A);
 	call(0xB7F7);
-	return RAM[0x14] | (RAM[0x15]<<8);
+	return (unsigned short)(((unsigned short)RAM[0x14]) | (((unsigned short)RAM[0x15])<<8));
 }
 
 static unsigned char
-get_byte() {
+get_byte(void) {
 	call(0xB79E);
 	return X;
 }
@@ -121,8 +122,10 @@ get_string(char *s) {
 
 	call(0xAD9E);
 	call(0xB6A3);
-	for (i = 0; i < A; i++)
-		s[i] = RAM[(X|(Y<<8))+i];
+    unsigned short addr = (unsigned short) ( ((unsigned short)X) | (((unsigned short)Y)<<8) );
+	for (i = 0; i < A; i++) {
+		s[i] = (char)RAM[addr+i];
+    }
 	s[A] = 0;
 }
 
@@ -170,7 +173,7 @@ error(unsigned char index) {
  * print friendlier strings, or implement "ON ERROR GOTO".
  */
 unsigned short
-plugin_error() {
+plugin_error(void) {
 	return 0;
 }
 
@@ -180,7 +183,7 @@ plugin_error() {
  * This gets called whenever we are in direct mode.
  */
 unsigned short
-plugin_main() {
+plugin_main(void) {
 	return 0;
 }
 
@@ -188,7 +191,7 @@ plugin_main() {
  * Tokenize BASIC Text
  */
 unsigned short
-plugin_crnch() {
+plugin_crnch(void) {
 	return 0;
 }
 
@@ -196,7 +199,7 @@ plugin_crnch() {
  * BASIC Text LIST
  */
 unsigned short
-plugin_qplop() {
+plugin_qplop(void) {
 	return 0;
 }
 
@@ -206,7 +209,7 @@ plugin_qplop() {
  * This is used for interpreting statements.
  */
 unsigned short
-plugin_gone() {
+plugin_gone(void) {
 	set_chrptr(get_chrptr()+1);
 	for (;;) {
 		unsigned short chrptr;
@@ -287,6 +290,6 @@ plugin_gone() {
  * New functions and operators go here.
  */
 unsigned short
-plugin_eval() {
+plugin_eval(void) {
 	return 0;
 }

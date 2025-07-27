@@ -35,13 +35,13 @@
 uint16_t
 readAddressBus(void *state)
 {
-	return readNodes(state, 16, (nodenum_t[]){ ab0, ab1, ab2, ab3, ab4, ab5, ab6, ab7, ab8, ab9, ab10, ab11, ab12, ab13, ab14, ab15 });
+	return (uint16_t)readNodes(state, 16, (nodenum_t[]){ ab0, ab1, ab2, ab3, ab4, ab5, ab6, ab7, ab8, ab9, ab10, ab11, ab12, ab13, ab14, ab15 });
 }
 
 uint8_t
 readDataBus(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ db0, db1, db2, db3, db4, db5, db6, db7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ db0, db1, db2, db3, db4, db5, db6, db7 });
 }
 
 void
@@ -59,55 +59,55 @@ readRW(void *state)
 uint8_t
 readA(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ a0,a1,a2,a3,a4,a5,a6,a7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ a0,a1,a2,a3,a4,a5,a6,a7 });
 }
 
 uint8_t
 readX(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ x0,x1,x2,x3,x4,x5,x6,x7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ x0,x1,x2,x3,x4,x5,x6,x7 });
 }
 
 uint8_t
 readY(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ y0,y1,y2,y3,y4,y5,y6,y7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ y0,y1,y2,y3,y4,y5,y6,y7 });
 }
 
 uint8_t
 readP(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ p0,p1,p2,p3,p4,p5,p6,p7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ p0,p1,p2,p3,p4,p5,p6,p7 });
 }
 
 uint8_t
 readIR(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7 }) ^ 0xFF;
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ notir0,notir1,notir2,notir3,notir4,notir5,notir6,notir7 }) ^ 0xFF;
 }
 
 uint8_t
 readSP(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ s0,s1,s2,s3,s4,s5,s6,s7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ s0,s1,s2,s3,s4,s5,s6,s7 });
 }
 
 uint8_t
 readPCL(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ pcl0,pcl1,pcl2,pcl3,pcl4,pcl5,pcl6,pcl7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ pcl0,pcl1,pcl2,pcl3,pcl4,pcl5,pcl6,pcl7 });
 }
 
 uint8_t
 readPCH(void *state)
 {
-	return readNodes(state, 8, (nodenum_t[]){ pch0,pch1,pch2,pch3,pch4,pch5,pch6,pch7 });
+	return (uint8_t)readNodes(state, 8, (nodenum_t[]){ pch0,pch1,pch2,pch3,pch4,pch5,pch6,pch7 });
 }
 
 uint16_t
 readPC(void *state)
 {
-	return (readPCH(state) << 8) | readPCL(state);
+	return (uint16_t)((uint16_t)readPCH(state) << 8) | ((uint16_t)readPCL(state));
 }
 
 /************************************************************
@@ -145,7 +145,7 @@ handleMemory(void *state)
  *
  ************************************************************/
 
-unsigned int cycle;
+unsigned long cycle;
 
 void
 step(void *state)
@@ -164,7 +164,7 @@ step(void *state)
 }
 
 void *
-initAndResetChip()
+initAndResetChip(void)
 {
 	/* set up data structures for efficient emulation */
 	nodenum_t nodes = sizeof(netlist_6502_node_is_pullup)/sizeof(*netlist_6502_node_is_pullup);
@@ -218,7 +218,7 @@ chipStatus(void *state)
 	uint8_t d = readDataBus(state);
 	BOOL r_w = isNodeHigh(state, rw);
 
-	printf("halfcyc:%d phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X",
+	printf("halfcyc:%ld phi0:%d AB:%04X D:%02X RnW:%d PC:%04X A:%02X X:%02X Y:%02X SP:%02X P:%02X IR:%02X",
 		   cycle,
 		   clk,
 		   a,

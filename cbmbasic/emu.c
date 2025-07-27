@@ -16,7 +16,7 @@ static uint16_t PC;
 static uint8_t A, X, Y, S, P;
 static uint8_t temp_lo, temp_hi;
 
-#define TEMP16 (temp_lo | temp_hi << 8)
+#define TEMP16 (uint16_t)( ((uint16_t)temp_lo) | ((uint16_t)temp_hi) << 8)
 
 static uint16_t AB;
 static uint8_t DB;
@@ -49,7 +49,7 @@ LOAD(uint16_t a)
 #define IS_T7 (t & T7)
 
 void
-IFETCH()
+IFETCH(void)
 {
 	AB = PC;
 	RW = RW_READ;
@@ -57,7 +57,7 @@ IFETCH()
 }
 
 void
-init()
+init(void)
 {
 	t = T1;
 	ir = 0;
@@ -71,7 +71,7 @@ init()
 }
 
 void
-EOI_INCPC_READPC()
+EOI_INCPC_READPC(void)
 {
 	PC++;
 	t <<= 1;
@@ -80,31 +80,31 @@ EOI_INCPC_READPC()
 }
 
 void
-DB_TO_ADDRLO()
+DB_TO_ADDRLO(void)
 {
 	temp_lo = DB;
 }
 void
-DB_TO_ADDRHI()
+DB_TO_ADDRHI(void)
 {
 	temp_hi = DB;
 }
 
 void
-EOI()
+EOI(void)
 {
 	t <<= 1;
 }
 
 void
-EOI_INCPC()
+EOI_INCPC(void)
 {
 	PC++;
 	EOI();
 }
 
 void
-EOI_INCPC_READADDR()
+EOI_INCPC_READADDR(void)
 {
 	EOI_INCPC();
 	AB = TEMP16;
@@ -112,7 +112,7 @@ EOI_INCPC_READADDR()
 }
 
 void
-EOI_INCPC_WRITEADDR()
+EOI_INCPC_WRITEADDR(void)
 {
 	EOI_INCPC();
 	AB = TEMP16;
@@ -120,7 +120,7 @@ EOI_INCPC_WRITEADDR()
 }
 
 void
-pha()
+pha(void)
 {
 	printf("%s",__func__);
 	if (IS_T2) {
@@ -138,7 +138,7 @@ pha()
 }
 
 void
-plp()
+plp(void)
 {
 	printf("%s",__func__);
 	if (IS_T2) {
@@ -162,7 +162,7 @@ plp()
 }
 
 void
-txs()
+txs(void)
 {
 	printf("%s",__func__);
 	/* T2 */
@@ -171,7 +171,7 @@ txs()
 }
 
 void
-lda_imm()
+lda_imm(void)
 {
 	printf("%s",__func__);
 	/* T2 */
@@ -181,7 +181,7 @@ lda_imm()
 }
 
 void
-ldx_imm()
+ldx_imm(void)
 {
 	printf("%s",__func__);
 	/* T2 */
@@ -191,7 +191,7 @@ ldx_imm()
 }
 
 void
-ldy_imm()
+ldy_imm(void)
 {
 	printf("%s",__func__);
 	/* T2 */
@@ -201,7 +201,7 @@ ldy_imm()
 }
 
 void
-lda_abs()
+lda_abs(void)
 {
 	printf("%s",__func__);
 	if (IS_T2) {
@@ -217,7 +217,7 @@ lda_abs()
 }
 
 void
-sta_abs()
+sta_abs(void)
 {
 	printf("%s",__func__);
 	if (IS_T2) {
@@ -235,7 +235,7 @@ sta_abs()
 static int cycle = 0;
 
 void
-emulate_step()
+emulate_step(void)
 {
 	/* memory */
 	if (RW == RW_READ) {
@@ -284,22 +284,22 @@ emulate_step()
 }
 
 void
-setup_emu()
+setup_emu(void)
 {
 	init();
 }
 
 void
-reset_emu()
+reset_emu(void)
 {
 	init();
-	PC = memory[0xFFFC] | memory[0xFFFD] << 8;
+	PC = (uint16_t)( memory[0xFFFC] | (((uint16_t)memory[0xFFFD]) << 8) );
 	printf("PC %x\n", PC);
 	IFETCH();
 }
 
 int
-emu_measure_instruction()
+emu_measure_instruction(void)
 {
 
 	for (;;) {

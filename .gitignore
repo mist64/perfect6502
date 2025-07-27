@@ -1,3 +1,5 @@
+build
+*.xcodeproj
 # emacs-style backup files
 *~
 # patch detritus
@@ -7,3 +9,4 @@
 cbmbasic/cbmbasic
 measure
 *.o
+

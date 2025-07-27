@@ -20,11 +20,11 @@ enum {
     COLOR_GREY3,
 };
 
-void clear_screen();
-void up_cursor();
-void down_cursor();
-void left_cursor();
-void right_cursor();
+void clear_screen(void);
+void up_cursor(void);
+void down_cursor(void);
+void left_cursor(void);
+void right_cursor(void);
 void move_cursor(int x, int y);
 void get_cursor(int* x, int* y);
 void set_color(int c);

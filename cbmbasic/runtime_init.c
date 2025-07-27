@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "../perfect6502.h"
 /* XXX hook up memory[] with RAM[] in runtime.c */
@@ -9,7 +10,7 @@
  *
  ************************************************************/
 
-extern int kernal_dispatch();
+extern int kernal_dispatch(void);
 
 /* imported by runtime.c */
 unsigned char A, X, Y, S, P;
