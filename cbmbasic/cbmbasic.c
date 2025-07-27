@@ -1,8 +1,11 @@
 #include <stdio.h>
+#include <string.h>
 #include "../perfect6502.h"
 #include "runtime.h"
 #include "runtime_init.h"
 #include <time.h>
+
+int benchmark_mode = 0;
 
 
 /*
@@ -18,9 +21,12 @@ RUN
 #define SHOW_AVG_SPEED      0
 
 int
-main()
+main(int argc, char *argv[])
 {
 	int clk = 0;
+
+	if (argc > 1 && strcmp(argv[1], "--benchmark") == 0)
+		benchmark_mode = 1;
  
 	void *state = initAndResetChip();
 

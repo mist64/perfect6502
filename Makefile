@@ -8,6 +8,9 @@ all: cbmbasic
 cbmbasic: $(OBJS)
 	$(CC) -o cbmbasic/cbmbasic $(OBJS)
 
+benchmark: cbmbasic
+	./cbmbasic/cbmbasic --benchmark
+
 clean:
 	rm -f $(OBJS) cbmbasic/cbmbasic
 

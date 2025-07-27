@@ -1,8 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "../perfect6502.h"
 /* XXX hook up memory[] with RAM[] in runtime.c */
+
+extern int benchmark_mode;
+extern unsigned long cycle;
+static clock_t benchmark_start_time;
  
 /************************************************************
  *
@@ -31,6 +36,10 @@ init_monitor()
 	if (readlen != 17591) {
 		perror("Error reading cbmbasic/cbmbasic.bin");
 		return 1;
+	}
+
+	if (benchmark_mode) {
+		benchmark_start_time = clock();
 	}
 
 	/*
@@ -63,6 +72,19 @@ void
 handle_monitor(void *state)
 {
 	PC = readPC(state);
+
+	if (PC == 0xFFCF && benchmark_mode) {
+		clock_t end_time = clock();
+		double elapsed_time = (double)(end_time - benchmark_start_time) / CLOCKS_PER_SEC;
+		double cycles_per_sec = cycle / elapsed_time;
+
+		printf("Benchmark results:\n");
+		printf("  Half-cycles: %lu\n", cycle);
+		printf("  Time: %.3f seconds\n", elapsed_time);
+		printf("  Performance: %.0f cycles/sec\n", cycles_per_sec);
+		chipStatus(state);
+		exit(0);
+	}
 
 	if (PC >= 0xFF90 && ((PC - 0xFF90) % 3 == 0)) {
 		/* get register status out of 6502 */
