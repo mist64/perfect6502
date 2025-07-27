@@ -555,7 +555,7 @@ LOAD(void) {
 		struct stat st;
 		unsigned short start;
 		unsigned short end;
-		unsigned char savedbyte;
+//		unsigned char savedbyte;
 
 		if (A) {
 			printf("UNIMPL: VERIFY\n");
@@ -648,7 +648,7 @@ for (i=0; i<255; i++) {
 			goto load_noerr;
 		} /* end if( RAM[kernal_filename]=='$' ) */
 
-		savedbyte = RAM[kernal_filename+kernal_filename_len]; /* TODO possible overflow */
+//		savedbyte = RAM[kernal_filename+kernal_filename_len]; /* TODO possible overflow */
 		RAM[kernal_filename+kernal_filename_len] = 0;
 
 /* on directory filename chdir on it */
@@ -698,7 +698,7 @@ missing_file_name:
 static void
 SAVE(void) {
 		FILE *f;
-		unsigned char savedbyte;
+//		unsigned char savedbyte;
 		unsigned short start;
 		unsigned short end;
 
@@ -714,7 +714,7 @@ SAVE(void) {
 			A = KERN_ERR_MISSING_FILE_NAME;
 			return;
 		}
-		savedbyte = RAM[kernal_filename+kernal_filename_len]; /* TODO possible overflow */
+//		savedbyte = RAM[kernal_filename+kernal_filename_len]; /* TODO possible overflow */
 		RAM[kernal_filename+kernal_filename_len] = 0;
 		f = fopen((char*)&RAM[kernal_filename], "wb"); /* overwrite - these are not the COMMODORE DOS semantics! */
 		if (!f) {

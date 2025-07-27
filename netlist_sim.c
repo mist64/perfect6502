@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "types.h"
 
 /* the smallest types to fit the numbers */
@@ -396,6 +397,8 @@ getGroupValue(group_value node_value)
 		case contains_nothing:
 			return NO;
 	}
+	assert(0);
+	return NO;
 }
 
 static inline void

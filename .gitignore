@@ -6,6 +6,7 @@ build
 *.orig
 *.rej
 # object files
-cbmbasic
+cbmbasic/cbmbasic
+measure
 *.o
 

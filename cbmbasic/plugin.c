@@ -46,6 +46,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #ifdef _WIN32
 #include <windows.h>
 #undef ERROR_FILE_NOT_FOUND    /* avoid conflict with CBM value below */
@@ -246,6 +247,7 @@ plugin_gone(void) {
 			a = get_word();
 			check_comma();
 			b = get_byte();
+			(void)b;
 			if (a==6502) {
 				printf("MICROSOFT!");
 				continue;
@@ -265,7 +267,10 @@ plugin_gone(void) {
 			char s[256];
 
 			get_string(s);
-			system(s);
+			errno = 0;
+			if (system(s) == -1 && errno != 0) {
+				perror("System call failed");
+			}
 
 			continue;
 		}

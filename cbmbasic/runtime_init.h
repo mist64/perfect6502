@@ -1,1 +1,1 @@
-void init_monitor(void);
+int init_monitor();

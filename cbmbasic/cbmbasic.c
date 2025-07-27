@@ -25,7 +25,9 @@ main()
 	void *state = initAndResetChip();
 
 	/* set up memory for user program */
-	init_monitor();
+	if (init_monitor()) {
+		return 1;
+	}
 
 #if SHOW_AVG_SPEED
     clock_t end_time;
