@@ -633,8 +633,9 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     for (i = 0; i < state->nodes; i++) {
         nodes_dep_count[i] = 0;
         nodes_left_dep_count[i] = 0;
-        for (count_t g = 0; g < nodes_gatecount[i]; g++) {
-            nodenum_t t = g + nodes_gates[i];;
+        nodenum_t g_start = nodes_gates[i];
+        nodenum_t g_end = g_start + nodes_gatecount[i];
+        for (nodenum_t t = g_start; t < g_end; t++) {
             nodenum_t c1 = transistors_c1[t];
             if (c1 != vss && c1 != vcc) {
                 nodes_dep_count[i]++;
@@ -680,8 +681,9 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     for (i = 0; i < state->nodes; i++) {
         nodes_dep_count[i] = 0;
         nodes_left_dep_count[i] = 0;
-        for (count_t g = 0; g < nodes_gatecount[i]; g++) {
-            nodenum_t t = g + nodes_gates[i];
+        nodenum_t g_start = nodes_gates[i];
+        nodenum_t g_end = g_start + nodes_gatecount[i];
+        for (nodenum_t t = g_start; t < g_end; t++) {
             nodenum_t c1 = transistors_c1[t];
             if (c1 != vss && c1 != vcc) {
                 add_nodes_dependant(state, i, c1, nodes_dep_count, state->nodes_dependant[i]);
