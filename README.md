@@ -4,7 +4,7 @@
 
 Consequently, *perfect6502* is
 * *perfect*: It is not a reimplementation of the 6502, but a simulation of the original transistors. Its complete behavior, its internal state and its outputs are half-cycle exact.
-* *slow*: Even though *perfect6502* is highly optimized C code, achieves only 1/30 of the speed of a 1 MHz 6502 on a high-end CPU of 2020.
+* *slow*: Even though *perfect6502* is highly optimized C code, it achieves only 1/30 of the speed of a 1 MHz 6502 on a high-end CPU of 2025.
 
 *perfect6502* is useful for
 * understanding and reverse engineering the 6502
@@ -32,7 +32,7 @@ You should get the following output:
 
 ## Benchmarking
 
-You can use the UNIX `time` tool to measure the performance of the emulator. Run `time cbmbasic/cbmbasic` and press Ctrl+C once it has reached `READY.` – the "user" time is the effective time that was required to reach character input. On a 1 MHz 6502, this takes 0.05 sec.
+You can measure the performance of the emulator by running `make benchmark`. It will print the number of half-cycles, the elapsed time, and the speed in half-cycles per second. On a 1 MHz 6502, reaching the `READY.` prompt takes 33155 half-cycles (0.017 sec).
 
 # Credits
 
