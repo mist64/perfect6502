@@ -268,8 +268,12 @@ listout_add(state_t *state, nodenum_t i)
 static inline void
 group_clear(state_t *state)
 {
+	/* Clear only the bits we set — faster than memset for small groups */
+	bitmap_t *gb = state->groupbitmap;
+	const nodenum_t *grp = state->group;
+	for (count_t i = 0; i < state->groupcount; i++)
+		gb[grp[i]>>BITMAP_SHIFT] &= ~(ONE << (grp[i] & BITMAP_MASK));
 	state->groupcount = 0;
-	bitmap_clear(state->groupbitmap, state->nodes);
 }
 
 static inline void
@@ -795,6 +799,12 @@ readNodes(state_t *state, int count, nodenum_t *nodelist)
 void
 writeNodes(state_t *state, int count, nodenum_t *nodelist, int v)
 {
-	for (int i = 0; i < 8; i++, v >>= 1)
-        setNode(state, nodelist[i], v & 1);
+	for (int i = 0; i < count; i++, v >>= 1) {
+		nodenum_t nn = nodelist[i];
+		BOOL s = v & 1;
+		set_nodes_pullup(state, nn, s);
+		set_nodes_pulldown(state, nn, !s);
+		listout_add(state, nn);
+	}
+	recalcNodeList(state);
 }
