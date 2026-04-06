@@ -492,7 +492,6 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts,
         3288 transistors, 3239 used in simulation after duplicate removal
         1725 entries in node list and used in simulation
         c1c2total = 6478
-        block_gate_size = 3239
         block_dep_size = 7260
 
     Working set = 89 KB allocations, 220 KB binary, plus system libs and text buffering
@@ -612,12 +611,6 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	free(c1c2count);
     c1c2count = NULL;
     
-    
-    /* Sum the counts for total allocation of gates */
-    size_t block_gate_size = 0;
-    for (i = 0; i < state->nodes; i++) {
-        block_gate_size += (size_t) nodes_gatecount[i];
-    }
     
     /* Allocate the block of gate data all at once */
     nodenum_t *nodes_gates = malloc((nodes+1) * sizeof(*nodes_gates));
