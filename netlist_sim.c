@@ -488,6 +488,38 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts,
 }
 
 
+/* Duplicate detection for the transistor list.
+    c1 and c2 are interchangeable, so a transistor's identity is the triple
+    (gate, min(c1,c2), max(c1,c2)) packed into one word. All three are
+    nodenum_t, so a valid key never sets any of the top 16 bits and ~0 is
+    free to use as the empty marker.
+*/
+typedef unsigned long long transkey_t;
+
+#define TRANSKEY_EMPTY (~(transkey_t)0)
+
+static inline transkey_t
+transistor_key(nodenum_t gate, nodenum_t c1, nodenum_t c2)
+{
+    nodenum_t lo = (c1 < c2) ? c1 : c2;
+    nodenum_t hi = (c1 < c2) ? c2 : c1;
+    return ((transkey_t)gate << 32) | ((transkey_t)lo << 16) | (transkey_t)hi;
+}
+
+/* splitmix64 finalizer - the keys are dense and highly structured, so the
+    low bits need mixing before they can be used as a bucket index */
+static inline size_t
+transistor_hash(transkey_t key)
+{
+    key ^= key >> 30;
+    key *= 0xbf58476d1ce4e5b9ULL;
+    key ^= key >> 27;
+    key *= 0x94d049bb133111ebULL;
+    key ^= key >> 31;
+    return (size_t)key;
+}
+
+
 /*  6502:
         3288 transistors, 3239 used in simulation after duplicate removal
         1725 entries in node list and used in simulation
@@ -542,26 +574,38 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 		nodes_gatecount[i] = 0;
 	}
     
-	/* Copy transistors into r/w data structure and remove duplicates */
+	/* Copy transistors into r/w data structure and remove duplicates
+        (including ones with reversed c1c2 values) */
+
+	/* an open-addressed hash set of canonical keys in O(N), sized to twice the
+        transistor count so the load factor stays at 0.5 and probing terminates */
+	size_t dedup_size = 1;
+	while (dedup_size < (size_t)state->transistors * 2)
+		dedup_size <<= 1;
+	transkey_t *dedup_keys = malloc(dedup_size * sizeof(*dedup_keys));
+	memset(dedup_keys, 0xff, dedup_size * sizeof(*dedup_keys));  /* == TRANSKEY_EMPTY */
+	const size_t dedup_mask = dedup_size - 1;
+
 	count_t transistors_used = 0;
 	for (i = 0; i < state->transistors; i++) {
 		nodenum_t gate = transdefs[i].gate;
 		nodenum_t c1 = transdefs[i].c1;
 		nodenum_t c2 = transdefs[i].c2;
-		/* skip duplicate transistors (including ones with reversed c1c2 values)
-            O(N^2) operation, but only done once at initialization, not a significant time sink */
+
+		transkey_t key = transistor_key(gate, c1, c2);
+		size_t slot = transistor_hash(key) & dedup_mask;
 		BOOL found = NO;
-		for (count_t j2 = 0; j2 < transistors_used; j2++) {
-			if (transistors_gate[j2] == gate &&
-				((transistors_c1[j2] == c1 &&
-				  transistors_c2[j2] == c2) ||
-				 (transistors_c1[j2] == c2 &&
-				  transistors_c2[j2] == c1))) {
-					 found = YES;
-                     break;
-				 }
+		while (dedup_keys[slot] != TRANSKEY_EMPTY) {
+			if (dedup_keys[slot] == key) {
+				found = YES;
+				break;
+			}
+			slot = (slot + 1) & dedup_mask;
 		}
+		/* keep the first occurrence: later initialization indexes transistors_c1/c2
+            by a prefix sum over gate counts, so the arrays must stay gate-sorted */
 		if (!found) {
+			dedup_keys[slot] = key;
 			transistors_gate[transistors_used] = gate;
 			transistors_c1[transistors_used] = c1;
 			transistors_c2[transistors_used] = c2;
@@ -569,6 +613,10 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 		}
 	}
 	state->transistors = transistors_used;
+
+    /* this is only used for duplicate removal */
+	free(dedup_keys);
+	dedup_keys = NULL;
 
 
 	/* cross reference transistors in nodes data structures */
