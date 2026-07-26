@@ -20,7 +20,7 @@ extern int kernal_dispatch(void);
 /* imported by runtime.c */
 unsigned char A, X, Y, S, P;
 unsigned short PC;
-int N, Z, C;
+unsigned char N, Z, C;
 
 int
 init_monitor()
