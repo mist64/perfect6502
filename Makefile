@@ -3,14 +3,16 @@ OBJS+=cbmbasic/cbmbasic.o cbmbasic/runtime.o cbmbasic/runtime_init.o cbmbasic/pl
 CFLAGS=-Werror -Wall -O3
 CC=cc
 
-all: cbmbasic
+all: cbmbasic/cbmbasic
 
-cbmbasic: $(OBJS)
+cbmbasic/cbmbasic: $(OBJS)
 	$(CC) -o cbmbasic/cbmbasic $(OBJS)
 
-benchmark: cbmbasic
+benchmark: cbmbasic/cbmbasic
 	./cbmbasic/cbmbasic --benchmark
 
 clean:
 	rm -f $(OBJS) cbmbasic/cbmbasic
+
+.PHONY: all benchmark clean
 

@@ -11,3 +11,5 @@ measure: $(OBJS)
 clean:
 	rm -f $(OBJS) measure
 
+.PHONY: all clean
+
