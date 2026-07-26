@@ -733,6 +733,8 @@ destroyNodesAndTransistors(state_t *state)
     free(state->nodes_c1c2s);
     free(state->nodes_c1c2offset);
     free(state->dependent_block);
+    free(state->nodes_dependant);
+    free(state->nodes_left_dependant);
     free(state->list1);
     free(state->list2);
     free(state->listout_bitmap);
