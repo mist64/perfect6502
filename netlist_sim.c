@@ -112,7 +112,6 @@ typedef struct {
 
 	nodenum_t *group;
 	count_t groupcount;
-	bitmap_t *groupbitmap;
 
 } state_t;
 
@@ -270,18 +269,14 @@ listout_add(state_t *state, nodenum_t i)
  * a group is a set of connected nodes, which consequently
  * share the same value
  *
- * we use an array and a count for O(1) insert and
- * iteration, and a redundant bitmap for O(1) lookup
+ * we use an array and a count for O(1) insert and iteration, and answer
+ * membership by scanning it: groups average under two nodes, and the largest
+ * on this netlist is 54
  */
 
 static inline void
 group_clear(state_t *state)
 {
-	/* Clear only the bits we set — faster than memset for small groups */
-	bitmap_t *gb = state->groupbitmap;
-	const nodenum_t *grp = state->group;
-	for (count_t i = 0; i < state->groupcount; i++)
-		gb[grp[i]>>BITMAP_SHIFT] &= ~(ONE << (grp[i] & BITMAP_MASK));
 	state->groupcount = 0;
 }
 
@@ -289,7 +284,6 @@ static inline void
 group_add(state_t *state, nodenum_t i)
 {
 	state->group[state->groupcount++] = i;
-	set_bitmap(state->groupbitmap, i, 1);
 }
 
 static inline nodenum_t
@@ -301,7 +295,13 @@ group_get(state_t *state, count_t n)
 static inline BOOL
 group_contains(state_t *state, nodenum_t el)
 {
-	return get_bitmap(state->groupbitmap, el);
+	const nodenum_t *grp = state->group;
+	const count_t count = state->groupcount;
+
+	for (count_t i = 0; i < count; i++)
+		if (grp[i] == el)
+			return YES;
+	return NO;
 }
 
 static inline count_t
@@ -519,8 +519,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	state->nodes_value = calloc(state->nodes, sizeof(*state->nodes_value));
 	state->nodes_base = calloc(state->nodes, sizeof(*state->nodes_base));
 	state->listout_bitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->listout_bitmap));
-	state->groupbitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->groupbitmap));
- 
+
     /* group content depends on active state, not easy to predict actual size needed */
 	state->group = calloc(state->nodes, sizeof(*state->group));
     
@@ -745,7 +744,6 @@ destroyNodesAndTransistors(state_t *state)
     free(state->list2);
     free(state->listout_bitmap);
     free(state->group);
-    free(state->groupbitmap);
     free(state);
 }
 
