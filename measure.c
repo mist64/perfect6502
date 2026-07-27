@@ -274,7 +274,7 @@ main()
 				BOOL different = NO;
 				int reads, writes;
 				uint16_t read[100], write[100], write_data[100];
-				uint8_t end_a, end_x, end_y, end_s = 0, end_p = 0;
+				uint8_t end_a = 0, end_x = 0, end_y = 0, end_s = 0, end_p = 0;
 				for (int j = 0; j < sizeof(magics)/sizeof(*magics); j++) {
 					setup_memory(opcode);
 					if (data[opcode].length == 2) {
