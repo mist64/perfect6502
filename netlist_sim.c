@@ -655,7 +655,8 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     /* Allocate the dependents block all at once */
     state->dependent_block = calloc( block_dep_size, sizeof(*state->nodes_dependant) );
     
-    /* Assign offsets from our block, using only counts needed */
+    /* Assign offsets from our block, a slot per gated transistor; the fill
+       below uses fewer and the ranges are compacted to match afterwards. */
     state->nodes_dependant = malloc((nodes+1) * sizeof(*state->nodes_dependant));
     nodenum_t dep_index = 0;
     for (i = 0; i < state->nodes; i++) {
@@ -665,7 +666,8 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     }
     state->nodes_dependant[state->nodes] = dep_index;    /* fill the end entry, so we can calculate distances/counts */
     
-    /* Assign offsets from our block, using only counts needed */
+    /* Assign offsets from our block, a slot per gated transistor; the fill
+       below uses fewer and the ranges are compacted to match afterwards. */
     state->nodes_left_dependant = malloc((nodes+1) * sizeof(*state->nodes_left_dependant));
     for (i = 0; i < state->nodes; i++) {
         nodenum_t count = nodes_left_dep_count[i];
@@ -696,7 +698,35 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
             }
         }
     }
-    
+
+    /* Compact both lists so each node's range ends where the next one begins:
+       changeNodeValue() reads node i from nodes_dependant[i] up to
+       nodes_dependant[i+1], while the offsets above reserve a slot per gated
+       transistor and the fill inserts each dependant only once. Entries only
+       ever move towards the front, so copying forward in place is safe, and
+       both lists live in dependent_block, so the second pass carries on where
+       the first left off. */
+    {
+        nodenum_t w = 0;
+        for (i = 0; i < state->nodes; i++) {
+            const nodenum_t r = state->nodes_dependant[i];
+            const nodenum_t count = nodes_dep_count[i];
+            state->nodes_dependant[i] = w;
+            for (nodenum_t k = 0; k < count; k++)
+                state->dependent_block[w++] = state->dependent_block[r + k];
+        }
+        state->nodes_dependant[state->nodes] = w;
+
+        for (i = 0; i < state->nodes; i++) {
+            const nodenum_t r = state->nodes_left_dependant[i];
+            const nodenum_t count = nodes_left_dep_count[i];
+            state->nodes_left_dependant[i] = w;
+            for (nodenum_t k = 0; k < count; k++)
+                state->dependent_block[w++] = state->dependent_block[r + k];
+        }
+        state->nodes_left_dependant[state->nodes] = w;
+    }
+
     /* these are unused after initialization */
     free(nodes_dep_count);
     nodes_dep_count = NULL;
@@ -733,6 +763,8 @@ destroyNodesAndTransistors(state_t *state)
     free(state->nodes_c1c2s);
     free(state->nodes_c1c2offset);
     free(state->dependent_block);
+    free(state->nodes_dependant);
+    free(state->nodes_left_dependant);
     free(state->list1);
     free(state->list2);
     free(state->listout_bitmap);
