@@ -152,9 +152,8 @@ step(void *state)
 {
 	BOOL clk = isNodeHigh(state, clk0);
 
-	/* invert clock */
+	/* invert clock; setNode settles the netlist itself */
 	setNode(state, clk0, !clk);
-	recalcNodeList(state);
 
 	/* handle memory reads and writes */
 	if (!clk)
@@ -191,7 +190,6 @@ initAndResetChip(void)
 
 	/* release RESET */
 	setNode(state, res, 1);
-	recalcNodeList(state);
 
 	cycle = 0;
 
