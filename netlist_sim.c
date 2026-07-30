@@ -91,7 +91,9 @@ typedef struct {
 	/* everything that describes a node */
 	bitmap_t *nodes_pullup;
 	bitmap_t *nodes_pulldown;
-	bitmap_t *nodes_value;
+	uint8_t *nodes_value;
+	/* each node's pullup/pulldown contribution, as a group_value */
+	uint8_t *nodes_base;
 	c1c2_t *nodes_c1c2s;
 	count_t *nodes_c1c2offset;
 	nodenum_t *nodes_dependant;
@@ -110,7 +112,6 @@ typedef struct {
 
 	nodenum_t *group;
 	count_t groupcount;
-	bitmap_t *groupbitmap;
 
 } state_t;
 
@@ -174,39 +175,46 @@ get_bitmap(bitmap_t *bitmap, int index)
  */
 
 static inline void
+refresh_nodes_base(state_t *state, transnum_t t)
+{
+	if (get_bitmap(state->nodes_pulldown, t))
+		state->nodes_base[t] = contains_pulldown;
+	else if (get_bitmap(state->nodes_pullup, t))
+		state->nodes_base[t] = contains_pullup;
+	else
+		state->nodes_base[t] = contains_nothing;
+}
+
+static inline void
 set_nodes_pullup(state_t *state, transnum_t t, BOOL s)
 {
 	set_bitmap(state->nodes_pullup, t, s);
-}
-
-static inline BOOL
-get_nodes_pullup(state_t *state, transnum_t t)
-{
-	return get_bitmap(state->nodes_pullup, t);
+	refresh_nodes_base(state, t);
 }
 
 static inline void
 set_nodes_pulldown(state_t *state, transnum_t t, BOOL s)
 {
 	set_bitmap(state->nodes_pulldown, t, s);
+	refresh_nodes_base(state, t);
 }
 
-static inline BOOL
-get_nodes_pulldown(state_t *state, transnum_t t)
+static inline group_value
+get_nodes_base(state_t *state, transnum_t t)
 {
-	return get_bitmap(state->nodes_pulldown, t);
+	return (group_value)state->nodes_base[t];
 }
 
 static inline void
 set_nodes_value(state_t *state, transnum_t t, BOOL s)
 {
-	set_bitmap(state->nodes_value, t, s);
+	state->nodes_value[t] = s;
 }
 
 static inline BOOL
 get_nodes_value(state_t *state, transnum_t t)
 {
-	return get_bitmap(state->nodes_value, t);
+	return state->nodes_value[t];
 }
 
 /************************************************************
@@ -261,18 +269,14 @@ listout_add(state_t *state, nodenum_t i)
  * a group is a set of connected nodes, which consequently
  * share the same value
  *
- * we use an array and a count for O(1) insert and
- * iteration, and a redundant bitmap for O(1) lookup
+ * we use an array and a count for O(1) insert and iteration, and answer
+ * membership by scanning it: groups average under two nodes, and the largest
+ * on this netlist is 54
  */
 
 static inline void
 group_clear(state_t *state)
 {
-	/* Clear only the bits we set — faster than memset for small groups */
-	bitmap_t *gb = state->groupbitmap;
-	const nodenum_t *grp = state->group;
-	for (count_t i = 0; i < state->groupcount; i++)
-		gb[grp[i]>>BITMAP_SHIFT] &= ~(ONE << (grp[i] & BITMAP_MASK));
 	state->groupcount = 0;
 }
 
@@ -280,7 +284,6 @@ static inline void
 group_add(state_t *state, nodenum_t i)
 {
 	state->group[state->groupcount++] = i;
-	set_bitmap(state->groupbitmap, i, 1);
 }
 
 static inline nodenum_t
@@ -292,7 +295,13 @@ group_get(state_t *state, count_t n)
 static inline BOOL
 group_contains(state_t *state, nodenum_t el)
 {
-	return get_bitmap(state->groupbitmap, el);
+	const nodenum_t *grp = state->group;
+	const count_t count = state->groupcount;
+
+	for (count_t i = 0; i < count; i++)
+		if (grp[i] == el)
+			return YES;
+	return NO;
 }
 
 static inline count_t
@@ -331,18 +340,15 @@ addNodeToGroup(state_t *state, nodenum_t n, group_value val)
 
 	group_add(state, n);
 
-    /* Give the compiler a hint that all of these can be calculated, and don't need to wait on branches.
-       This results in a small speedup.
+    /* A node contributes the greater of its pullup/pulldown state and its own
+       value. Give the compiler a hint that both can be calculated, and don't
+       need to wait on branches. This results in a small speedup.
     */
-    BOOL isPulldown = get_nodes_pulldown(state, n);
-    BOOL isPullup = get_nodes_pullup(state, n);
-    BOOL nodeValue = get_nodes_value(state, n);
-	if (val < contains_pulldown && isPulldown)
-		val = contains_pulldown;
-	if (val < contains_pullup && isPullup)
-		val = contains_pullup;
-	if (val < contains_hi && nodeValue)
-		val = contains_hi;
+    const group_value base = get_nodes_base(state, n);
+    const group_value hi = get_nodes_value(state, n) ? contains_hi : contains_nothing;
+    const group_value contrib = base > hi ? base : hi;
+	if (val < contrib)
+		val = contrib;
     /* state can remain at contains_nothing if the node value is low */
 
 	/* revisit all transistors that control this node */
@@ -494,8 +500,8 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts,
         c1c2total = 6478
         block_dep_size = 7260
 
-    Working set = 89 KB allocations, 220 KB binary, plus system libs and text buffering
-                = 604 KB in release build
+    Working set = 92 KB allocations, 220 KB binary, plus system libs and text buffering
+                = 607 KB in release build
 */
 state_t *
 setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nodenum_t nodes, nodenum_t transistors, nodenum_t vss, nodenum_t vcc)
@@ -510,10 +516,10 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	state->nodes_c1c2offset = calloc(state->nodes + 1, sizeof(*state->nodes_c1c2offset));
 	state->nodes_pullup = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pullup));
 	state->nodes_pulldown = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pulldown));
-	state->nodes_value = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_value));
+	state->nodes_value = calloc(state->nodes, sizeof(*state->nodes_value));
+	state->nodes_base = calloc(state->nodes, sizeof(*state->nodes_base));
 	state->listout_bitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->listout_bitmap));
-	state->groupbitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->groupbitmap));
- 
+
     /* group content depends on active state, not easy to predict actual size needed */
 	state->group = calloc(state->nodes, sizeof(*state->group));
     
@@ -730,6 +736,7 @@ destroyNodesAndTransistors(state_t *state)
     free(state->nodes_pullup);
     free(state->nodes_pulldown);
     free(state->nodes_value);
+    free(state->nodes_base);
     free(state->nodes_c1c2s);
     free(state->nodes_c1c2offset);
     free(state->dependent_block);
@@ -737,7 +744,6 @@ destroyNodesAndTransistors(state_t *state)
     free(state->list2);
     free(state->listout_bitmap);
     free(state->group);
-    free(state->groupbitmap);
     free(state);
 }
 
