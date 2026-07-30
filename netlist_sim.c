@@ -94,9 +94,14 @@ typedef struct {
 	bitmap_t *nodes_value;
 	c1c2_t *nodes_c1c2s;
 	count_t *nodes_c1c2offset;
-	nodenum_t *nodes_dependant;
 	nodenum_t *nodes_left_dependant;
     nodenum_t *dependent_block;
+
+	/* number of turned-on transistors that connect this node to something */
+	count_t *nodes_on_degree;
+	/* the nodes touched by the transistors a node gates, NOT deduplicated */
+	count_t *nodes_endpoint_offset;
+	nodenum_t *endpoint_block;
 
 	/* the nodes we are working with */
 	nodenum_t *list1;
@@ -384,9 +389,72 @@ getGroupValue(group_value node_value)
 	return NO;
 }
 
+/*
+ * assign a new value to a node, switching the transistors it gates:
+ * keep the on-degree of the nodes they touch up to date, and collect
+ * the nodes behind them for the next run
+ */
+static inline void
+changeNodeValue(state_t *state, nodenum_t nn, BOOL newv)
+{
+	set_nodes_value(state, nn, newv);
+
+	const count_t ep_offset = state->nodes_endpoint_offset[nn];
+	const count_t ep_end = state->nodes_endpoint_offset[nn+1];
+	const nodenum_t *endpoint_block = state->endpoint_block;
+	count_t *on_degree = state->nodes_on_degree;
+
+	if (newv) {
+		for (count_t g = ep_offset; g < ep_end; g++)
+			on_degree[endpoint_block[g]]++;
+
+		/*
+		 * the transistors are now on, so the nodes on either side of one
+		 * end up in the same group - recalculating from one side is enough
+		 */
+		const nodenum_t dep_offset = state->nodes_left_dependant[nn];
+		const nodenum_t dep_end = state->nodes_left_dependant[nn+1];
+		for (count_t g = dep_offset; g < dep_end; g++) {
+			listout_add(state, state->dependent_block[g]);
+		}
+	} else {
+		/*
+		 * the transistors are now off, so both sides come loose and have to
+		 * be recalculated separately - which is every endpoint, exactly what
+		 * we are already walking. listout_add filters the repeats out.
+		 */
+		for (count_t g = ep_offset; g < ep_end; g++) {
+			const nodenum_t e = endpoint_block[g];
+			on_degree[e]--;
+			listout_add(state, e);
+		}
+	}
+}
+
 static inline void
 recalcNode(state_t *state, nodenum_t node)
 {
+	/*
+	 * A node that no turned-on transistor connects to anything is a group of
+	 * its own, so the whole group walk collapses to reading its on-degree.
+	 * Its own pulldown or pullup then decides the value, and a node with
+	 * neither of those keeps the value it already has - it cannot change at
+	 * all.
+	 */
+	if (state->nodes_on_degree[node] == 0) {
+		BOOL newv;
+		if (get_nodes_pulldown(state, node))
+			newv = NO;
+		else if (get_nodes_pullup(state, node))
+			newv = YES;
+		else
+			return;		/* provably inert */
+
+		if (get_nodes_value(state, node) != newv)
+			changeNodeValue(state, node, newv);
+		return;
+	}
+
 	/*
 	 * get all nodes that are connected through
 	 * transistors, starting with this one
@@ -405,31 +473,43 @@ recalcNode(state_t *state, nodenum_t node)
     const count_t grp_count = group_count(state);
 	for (count_t i = 0; i < grp_count; i++) {
 		const nodenum_t nn = group_get(state, i);
-		if (get_nodes_value(state, nn) != newv) {
-			set_nodes_value(state, nn, newv);
-
-			if (newv) {
-                const nodenum_t dep_offset = state->nodes_left_dependant[nn];
-                const nodenum_t dep_end = state->nodes_left_dependant[nn+1];
-				for (count_t g = dep_offset; g < dep_end; g++) {
-					listout_add(state, state->dependent_block[g]);
-				}
-			} else {
-                const nodenum_t dep_offset = state->nodes_dependant[nn];
-                const nodenum_t dep_end = state->nodes_dependant[nn+1];
-				for (count_t g = dep_offset; g < dep_end; g++) {
-					listout_add(state, state->dependent_block[g]);
-				}
-			}
-		}
+		if (get_nodes_value(state, nn) != newv)
+			changeNodeValue(state, nn, newv);
 	}
 }
+
+#ifdef DEBUG_ON_DEGREE
+/*
+ * Recompute every on-degree the slow way and check it against the
+ * incrementally maintained counter. A desync silently skips work instead of
+ * crashing, so it is worth being able to catch it at the source.
+ */
+static void
+verify_on_degree(state_t *state)
+{
+	for (nodenum_t n = 0; n < state->nodes; n++) {
+		if (n == state->vss || n == state->vcc)
+			continue;
+		count_t expected = 0;
+		const count_t start = state->nodes_c1c2offset[n];
+		const count_t end = state->nodes_c1c2offset[n+1];
+		for (count_t t = start; t < end; t++)
+			if (get_nodes_value(state, state->nodes_c1c2s[t].gate))
+				expected++;
+		assert(state->nodes_on_degree[n] == expected);
+	}
+}
+#endif
 
 void
 recalcNodeList(state_t *state)
 {
     const int max_iterations = 50;
     int j;
+
+#ifdef DEBUG_ON_DEGREE
+	verify_on_degree(state);
+#endif
     
 	for (j = 0; j < max_iterations; j++) {	/* loop limiter */
 		/*
@@ -492,10 +572,11 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts,
         3288 transistors, 3239 used in simulation after duplicate removal
         1725 entries in node list and used in simulation
         c1c2total = 6478
-        block_dep_size = 7260
+        block_dep_size = 3239
+        endpoint_block_size = 4021
 
-    Working set = 89 KB allocations, 220 KB binary, plus system libs and text buffering
-                = 604 KB in release build
+    Working set = 92 KB allocations, 220 KB binary, plus system libs and text buffering
+                = 607 KB in release build
 */
 state_t *
 setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nodenum_t nodes, nodenum_t transistors, nodenum_t vss, nodenum_t vcc)
@@ -514,6 +595,15 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	state->listout_bitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->listout_bitmap));
 	state->groupbitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->groupbitmap));
  
+    /* All node values start out low, so every transistor is off and every
+       on-degree is zero. vss and vcc are deliberately left out of the endpoint
+       list and never have a value of their own assigned, so their counters
+       would sit at zero forever and wrongly qualify them as inert - park them
+       on a value that keeps them out of the fast path for good. */
+	state->nodes_on_degree = calloc(state->nodes, sizeof(*state->nodes_on_degree));
+	state->nodes_on_degree[vss] = 1;
+	state->nodes_on_degree[vcc] = 1;
+
     /* group content depends on active state, not easy to predict actual size needed */
 	state->group = calloc(state->nodes, sizeof(*state->group));
     
@@ -527,7 +617,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     
     
     /* these are only used in initialization */
-	nodenum_t *nodes_dep_count = calloc(state->nodes, sizeof(nodenum_t));
+	nodenum_t *nodes_endpoint_count = calloc(state->nodes, sizeof(nodenum_t));
 	nodenum_t *nodes_left_dep_count = calloc(state->nodes, sizeof(nodenum_t));
 	count_t *nodes_gatecount = calloc(state->nodes, sizeof(count_t));
 	nodenum_t *transistors_gate = calloc(state->transistors, sizeof(nodenum_t));
@@ -624,22 +714,22 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     }
     nodes_gates[state->nodes] = node_index;    /* fill the end entry, so we can calculate distances/counts */
 
-    /* See how many dependent node entries we really need.
+    /* See how many endpoint and dependent node entries we really need.
         Must happen after gatecount and nodes_gates assignments!
     */
     for (i = 0; i < state->nodes; i++) {
-        nodes_dep_count[i] = 0;
+        nodes_endpoint_count[i] = 0;
         nodes_left_dep_count[i] = 0;
         nodenum_t g_start = nodes_gates[i];
         nodenum_t g_end = g_start + nodes_gatecount[i];
         for (nodenum_t t = g_start; t < g_end; t++) {
             nodenum_t c1 = transistors_c1[t];
             if (c1 != vss && c1 != vcc) {
-                nodes_dep_count[i]++;
+                nodes_endpoint_count[i]++;
             }
             nodenum_t c2 = transistors_c2[t];
             if (c2 != vss && c2 != vcc) {
-                nodes_dep_count[i]++;
+                nodes_endpoint_count[i]++;
             }
             nodes_left_dep_count[i]++;
         }
@@ -648,25 +738,15 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	/* Sum the counts to find total size of the dependents array */
     size_t block_dep_size = 0;
     for (i = 0; i < state->nodes; i++) {
-        block_dep_size += nodes_dep_count[i];
         block_dep_size += nodes_left_dep_count[i];
     }
     
     /* Allocate the dependents block all at once */
-    state->dependent_block = calloc( block_dep_size, sizeof(*state->nodes_dependant) );
-    
-    /* Assign offsets from our block, using only counts needed */
-    state->nodes_dependant = malloc((nodes+1) * sizeof(*state->nodes_dependant));
-    nodenum_t dep_index = 0;
-    for (i = 0; i < state->nodes; i++) {
-        nodenum_t count = nodes_dep_count[i];
-        state->nodes_dependant[i] = dep_index;
-        dep_index += count;
-    }
-    state->nodes_dependant[state->nodes] = dep_index;    /* fill the end entry, so we can calculate distances/counts */
-    
+    state->dependent_block = calloc( block_dep_size, sizeof(*state->dependent_block) );
+
     /* Assign offsets from our block, using only counts needed */
     state->nodes_left_dependant = malloc((nodes+1) * sizeof(*state->nodes_left_dependant));
+    nodenum_t dep_index = 0;
     for (i = 0; i < state->nodes; i++) {
         nodenum_t count = nodes_left_dep_count[i];
         state->nodes_left_dependant[i] = dep_index;
@@ -674,20 +754,32 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     }
     state->nodes_left_dependant[state->nodes] = dep_index;    /* fill the end entry, so we can calculate distances/counts */
     
+    /* Assign offsets for the endpoint list. Unlike the dependents it is not
+       deduplicated - the on-degree has to move once per transistor endpoint,
+       not once per distinct node - so its counts are exact. */
+    state->nodes_endpoint_offset = malloc((nodes+1) * sizeof(*state->nodes_endpoint_offset));
+    count_t endpoint_index = 0;
+    for (i = 0; i < state->nodes; i++) {
+        state->nodes_endpoint_offset[i] = endpoint_index;
+        endpoint_index += nodes_endpoint_count[i];
+    }
+    state->nodes_endpoint_offset[state->nodes] = endpoint_index;    /* fill the end entry, so we can calculate distances/counts */
+    state->endpoint_block = calloc(endpoint_index, sizeof(*state->endpoint_block));
+    endpoint_index = 0;
+
     /* Copy dependencies into smaller data structures */
     for (i = 0; i < state->nodes; i++) {
-        nodes_dep_count[i] = 0;
         nodes_left_dep_count[i] = 0;
         nodenum_t g_start = nodes_gates[i];
         nodenum_t g_end = g_start + nodes_gatecount[i];
         for (nodenum_t t = g_start; t < g_end; t++) {
             nodenum_t c1 = transistors_c1[t];
             if (c1 != vss && c1 != vcc) {
-                add_nodes_dependant(state, i, c1, nodes_dep_count, state->nodes_dependant[i]);
+                state->endpoint_block[endpoint_index++] = c1;
             }
             nodenum_t c2 = transistors_c2[t];
             if (c2 != vss && c2 != vcc) {
-                add_nodes_dependant(state, i, c2, nodes_dep_count, state->nodes_dependant[i]);
+                state->endpoint_block[endpoint_index++] = c2;
             }
             if (c1 != vss && c1 != vcc) {
                 add_nodes_dependant(state, i, c1, nodes_left_dep_count, state->nodes_left_dependant[i]);
@@ -696,10 +788,10 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
             }
         }
     }
-    
+
     /* these are unused after initialization */
-    free(nodes_dep_count);
-    nodes_dep_count = NULL;
+    free(nodes_endpoint_count);
+    nodes_endpoint_count = NULL;
     free(nodes_left_dep_count);
     nodes_left_dep_count = NULL;
     free(nodes_gatecount);
@@ -733,6 +825,9 @@ destroyNodesAndTransistors(state_t *state)
     free(state->nodes_c1c2s);
     free(state->nodes_c1c2offset);
     free(state->dependent_block);
+    free(state->nodes_on_degree);
+    free(state->nodes_endpoint_offset);
+    free(state->endpoint_block);
     free(state->list1);
     free(state->list2);
     free(state->listout_bitmap);
