@@ -37,6 +37,20 @@ typedef uint16_t transnum_t;
 typedef uint16_t count_t;
 /* nodenum_t is declared in types.h, because it's API */
 
+/*
+ * An on-degree: how many turned-on transistors connect a node to an ordinary
+ * node, to vss, and to vcc, counted separately but packed into one word so
+ * that the whole lot is a single load. 10 bits each is far more than the
+ * netlist needs - the 6502's busiest node reaches 12, 9 and 1 respectively.
+ */
+typedef unsigned int degree_t;
+#define DEGREE_OTHER      ((degree_t)1)
+#define DEGREE_VSS        ((degree_t)1 << 10)
+#define DEGREE_VCC        ((degree_t)1 << 20)
+#define DEGREE_OTHER_MASK (((degree_t)1023))
+#define DEGREE_VSS_MASK   (((degree_t)1023) << 10)
+#define DEGREE_VCC_MASK   (((degree_t)1023) << 20)
+
 /************************************************************
  *
  * Main State Data Structure
@@ -97,11 +111,13 @@ typedef struct {
 	nodenum_t *nodes_left_dependant;
     nodenum_t *dependent_block;
 
-	/* number of turned-on transistors that connect this node to something */
-	count_t *nodes_on_degree;
-	/* the nodes touched by the transistors a node gates, NOT deduplicated */
+	/* each node's on-degree */
+	degree_t *nodes_on_degree;
+	/* the nodes touched by the transistors a node gates, NOT deduplicated,
+	   with each endpoint's contribution alongside */
 	count_t *nodes_endpoint_offset;
 	nodenum_t *endpoint_block;
+	degree_t *endpoint_delta;
 
 	/* the nodes we are working with */
 	nodenum_t *list1;
@@ -402,11 +418,12 @@ changeNodeValue(state_t *state, nodenum_t nn, BOOL newv)
 	const count_t ep_offset = state->nodes_endpoint_offset[nn];
 	const count_t ep_end = state->nodes_endpoint_offset[nn+1];
 	const nodenum_t *endpoint_block = state->endpoint_block;
-	count_t *on_degree = state->nodes_on_degree;
+	const degree_t *endpoint_delta = state->endpoint_delta;
+	degree_t *on_degree = state->nodes_on_degree;
 
 	if (newv) {
 		for (count_t g = ep_offset; g < ep_end; g++)
-			on_degree[endpoint_block[g]]++;
+			on_degree[endpoint_block[g]] += endpoint_delta[g];
 
 		/*
 		 * the transistors are now on, so the nodes on either side of one
@@ -425,7 +442,7 @@ changeNodeValue(state_t *state, nodenum_t nn, BOOL newv)
 		 */
 		for (count_t g = ep_offset; g < ep_end; g++) {
 			const nodenum_t e = endpoint_block[g];
-			on_degree[e]--;
+			on_degree[e] -= endpoint_delta[g];
 			listout_add(state, e);
 		}
 	}
@@ -435,15 +452,21 @@ static inline void
 recalcNode(state_t *state, nodenum_t node)
 {
 	/*
-	 * A node that no turned-on transistor connects to anything is a group of
-	 * its own, so the whole group walk collapses to reading its on-degree.
-	 * Its own pulldown or pullup then decides the value, and a node with
-	 * neither of those keeps the value it already has - it cannot change at
-	 * all.
+	 * A node that no turned-on transistor connects to an ordinary node is a
+	 * group of its own, whatever it may be tied to on the power rails, so the
+	 * whole group walk collapses to reading its on-degree. What is left
+	 * decides the value the same way addNodeToGroup would have: vss beats vcc,
+	 * vcc beats the node's own pulldown or pullup, and a node with neither of
+	 * those keeps the value it already has - it cannot change at all.
 	 */
-	if (state->nodes_on_degree[node] == 0) {
+	const degree_t deg = state->nodes_on_degree[node];
+	if ((deg & DEGREE_OTHER_MASK) == 0) {
 		BOOL newv;
-		if (get_nodes_pulldown(state, node))
+		if (deg & DEGREE_VSS_MASK)
+			newv = NO;
+		else if (deg & DEGREE_VCC_MASK)
+			newv = YES;
+		else if (get_nodes_pulldown(state, node))
 			newv = NO;
 		else if (get_nodes_pullup(state, node))
 			newv = YES;
@@ -490,12 +513,15 @@ verify_on_degree(state_t *state)
 	for (nodenum_t n = 0; n < state->nodes; n++) {
 		if (n == state->vss || n == state->vcc)
 			continue;
-		count_t expected = 0;
+		degree_t expected = 0;
 		const count_t start = state->nodes_c1c2offset[n];
 		const count_t end = state->nodes_c1c2offset[n+1];
 		for (count_t t = start; t < end; t++)
-			if (get_nodes_value(state, state->nodes_c1c2s[t].gate))
-				expected++;
+			if (get_nodes_value(state, state->nodes_c1c2s[t].gate)) {
+				const nodenum_t other = state->nodes_c1c2s[t].other_node;
+				expected += (other == state->vss) ? DEGREE_VSS :
+				            (other == state->vcc) ? DEGREE_VCC : DEGREE_OTHER;
+			}
 		assert(state->nodes_on_degree[n] == expected);
 	}
 }
@@ -575,8 +601,8 @@ add_nodes_dependant(state_t *state, nodenum_t a, nodenum_t b, nodenum_t *counts,
         block_dep_size = 3239
         endpoint_block_size = 4021
 
-    Working set = 92 KB allocations, 220 KB binary, plus system libs and text buffering
-                = 607 KB in release build
+    Working set = 111 KB allocations, 220 KB binary, plus system libs and text buffering
+                = 626 KB in release build
 */
 state_t *
 setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nodenum_t nodes, nodenum_t transistors, nodenum_t vss, nodenum_t vcc)
@@ -598,11 +624,11 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     /* All node values start out low, so every transistor is off and every
        on-degree is zero. vss and vcc are deliberately left out of the endpoint
        list and never have a value of their own assigned, so their counters
-       would sit at zero forever and wrongly qualify them as inert - park them
-       on a value that keeps them out of the fast path for good. */
+       would sit at zero forever and wrongly qualify them as a group of one -
+       park them on a value that keeps them out of the fast path for good. */
 	state->nodes_on_degree = calloc(state->nodes, sizeof(*state->nodes_on_degree));
-	state->nodes_on_degree[vss] = 1;
-	state->nodes_on_degree[vcc] = 1;
+	state->nodes_on_degree[vss] = DEGREE_OTHER;
+	state->nodes_on_degree[vcc] = DEGREE_OTHER;
 
     /* group content depends on active state, not easy to predict actual size needed */
 	state->group = calloc(state->nodes, sizeof(*state->group));
@@ -765,7 +791,12 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
     }
     state->nodes_endpoint_offset[state->nodes] = endpoint_index;    /* fill the end entry, so we can calculate distances/counts */
     state->endpoint_block = calloc(endpoint_index, sizeof(*state->endpoint_block));
+    state->endpoint_delta = calloc(endpoint_index, sizeof(*state->endpoint_delta));
     endpoint_index = 0;
+
+    /* what an endpoint contributes to its own on-degree is decided by what is
+       on the far side of the transistor, not by the endpoint itself */
+#define ENDPOINT_DELTA(far) ((far) == vss ? DEGREE_VSS : (far) == vcc ? DEGREE_VCC : DEGREE_OTHER)
 
     /* Copy dependencies into smaller data structures */
     for (i = 0; i < state->nodes; i++) {
@@ -774,11 +805,13 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
         nodenum_t g_end = g_start + nodes_gatecount[i];
         for (nodenum_t t = g_start; t < g_end; t++) {
             nodenum_t c1 = transistors_c1[t];
+            nodenum_t c2 = transistors_c2[t];
             if (c1 != vss && c1 != vcc) {
+                state->endpoint_delta[endpoint_index] = ENDPOINT_DELTA(c2);
                 state->endpoint_block[endpoint_index++] = c1;
             }
-            nodenum_t c2 = transistors_c2[t];
             if (c2 != vss && c2 != vcc) {
+                state->endpoint_delta[endpoint_index] = ENDPOINT_DELTA(c1);
                 state->endpoint_block[endpoint_index++] = c2;
             }
             if (c1 != vss && c1 != vcc) {
@@ -788,6 +821,8 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
             }
         }
     }
+
+#undef ENDPOINT_DELTA
 
     /* these are unused after initialization */
     free(nodes_endpoint_count);
@@ -828,6 +863,7 @@ destroyNodesAndTransistors(state_t *state)
     free(state->nodes_on_degree);
     free(state->nodes_endpoint_offset);
     free(state->endpoint_block);
+    free(state->endpoint_delta);
     free(state->list1);
     free(state->list2);
     free(state->listout_bitmap);
