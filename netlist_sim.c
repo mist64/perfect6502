@@ -89,9 +89,7 @@ typedef struct {
 	nodenum_t vcc;
 
 	/* everything that describes a node */
-	bitmap_t *nodes_pullup;
-	bitmap_t *nodes_pulldown;
-	bitmap_t *nodes_value;
+	uint8_t *node_flags;
 	c1c2_t *nodes_c1c2s;
 	count_t *nodes_c1c2offset;
 	nodenum_t *nodes_dependant;
@@ -173,40 +171,55 @@ get_bitmap(bitmap_t *bitmap, int index)
  * so we don't bother initializing it properly or special-casing writes.
  */
 
+/* Keep all three flags in one byte per node to avoid separate bitmap lookups.
+ * Getters normalize masked bits to 0/1 for comparisons and readNodes(). */
+#define NODE_PULLUP 1
+#define NODE_PULLDOWN 2
+#define NODE_VALUE 4
+
 static inline void
 set_nodes_pullup(state_t *state, transnum_t t, BOOL s)
 {
-	set_bitmap(state->nodes_pullup, t, s);
+	if (s)
+		state->node_flags[t] |= NODE_PULLUP;
+	else
+		state->node_flags[t] &= ~NODE_PULLUP;
 }
 
 static inline BOOL
 get_nodes_pullup(state_t *state, transnum_t t)
 {
-	return get_bitmap(state->nodes_pullup, t);
+	return (state->node_flags[t] & NODE_PULLUP) != 0;
 }
 
 static inline void
 set_nodes_pulldown(state_t *state, transnum_t t, BOOL s)
 {
-	set_bitmap(state->nodes_pulldown, t, s);
+	if (s)
+		state->node_flags[t] |= NODE_PULLDOWN;
+	else
+		state->node_flags[t] &= ~NODE_PULLDOWN;
 }
 
 static inline BOOL
 get_nodes_pulldown(state_t *state, transnum_t t)
 {
-	return get_bitmap(state->nodes_pulldown, t);
+	return (state->node_flags[t] & NODE_PULLDOWN) != 0;
 }
 
 static inline void
 set_nodes_value(state_t *state, transnum_t t, BOOL s)
 {
-	set_bitmap(state->nodes_value, t, s);
+	if (s)
+		state->node_flags[t] |= NODE_VALUE;
+	else
+		state->node_flags[t] &= ~NODE_VALUE;
 }
 
 static inline BOOL
 get_nodes_value(state_t *state, transnum_t t)
 {
-	return get_bitmap(state->nodes_value, t);
+	return (state->node_flags[t] & NODE_VALUE) != 0;
 }
 
 /************************************************************
@@ -508,14 +521,14 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 	state->vcc = vcc;
     
 	state->nodes_c1c2offset = calloc(state->nodes + 1, sizeof(*state->nodes_c1c2offset));
-	state->nodes_pullup = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pullup));
-	state->nodes_pulldown = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_pulldown));
-	state->nodes_value = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->nodes_value));
+	state->node_flags = calloc(state->nodes, sizeof(*state->node_flags));
 	state->listout_bitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->listout_bitmap));
 	state->groupbitmap = calloc(WORDS_FOR_BITS(state->nodes), sizeof(*state->groupbitmap));
  
     /* group content depends on active state, not easy to predict actual size needed */
 	state->group = calloc(state->nodes, sizeof(*state->group));
+	/* The first group_clear() must see an empty group. */
+	state->groupcount = 0;
     
     /* ping pong state buffers */
 	state->list1 = calloc(state->nodes, sizeof(*state->list1));
@@ -727,9 +740,7 @@ setupNodesAndTransistors(netlist_transdefs *transdefs, BOOL *node_is_pullup, nod
 void
 destroyNodesAndTransistors(state_t *state)
 {
-    free(state->nodes_pullup);
-    free(state->nodes_pulldown);
-    free(state->nodes_value);
+    free(state->node_flags);
     free(state->nodes_c1c2s);
     free(state->nodes_c1c2offset);
     free(state->dependent_block);
